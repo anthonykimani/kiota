@@ -1,0 +1,60 @@
+<head>
+  <style type="text/css">
+    .table {
+      font-size: 0.8rem;
+      border-collapse: collapse;
+      border: 0.75px solid #ccc;
+      margin: 1.5rem 0;
+      width: 100%;
+    }
+    .tr {
+      border-bottom: 0.75px solid #ccc;
+    }
+    .th {
+      background-color: #f5f5f5;
+      padding: 0.4rem;
+      text-align: left;
+    }
+    .td {
+      padding: 0.4rem;
+      text-align: left;
+    }
+    .p {
+      font-size: 0.8rem;
+      margin: 1rem 0;
+    }
+  </style>
+</head>
+
+<p class="p">
+  <b>{{title}}</b>
+</p>
+
+<table class="table">
+  <tr class="tr">
+    <td class="td">Service</td>
+    <td class="td">{{service}}</td>
+  </tr>
+  <tr class="tr">
+    <td class="td">Service Error code</td>
+    <td class="td">{{errorCode}}</td>
+  </tr>
+  <tr class="tr">
+    <td class="td">Message</td>
+    <td class="td">{{message}}</td>
+  </tr>
+  <tr class="tr">
+    <td class="td">Severity</td>
+    <td class="td">{{severity}}</td>
+  </tr>
+  <tr class="tr">
+    <td class="td">Occurred at</td>
+    <td class="td">{{time}}</td>
+  </tr>
+  <tr class="tr">
+    <td class="td">Location</td>
+    <td class="td">{{location}}</td>
+  </tr>
+</table>
+
+<p class="p">{{log}}</p>
