@@ -61,9 +61,11 @@ Complete documentation for the Kiota wealth preservation platform.
 ## 🚀 Getting Started Paths
 
 ### I want to understand the product
-1. Read product plan (in parent folder)
-2. View screen specifications
+1. Read [Product Plan](./product/PRODUCT_PLAN.md)
+2. View [Screen Specifications](./product/SCREENS.md)
 3. Explore live app at http://localhost:3000
+4. Review [Market Analysis](./product/MARKET.md)
+5. Check [Business Model](./product/BUSINESS_MODEL.md)
 
 ### I want to start developing
 1. Follow [Setup Guide](./guides/SETUP.md)
@@ -85,27 +87,31 @@ Complete documentation for the Kiota wealth preservation platform.
 - Setup guide for developers
 - Type system (in code)
 - Component library (live showcase)
+- Product plan and specifications
+- Screen specifications (30 screens)
+- Market analysis
+- Business model and financial projections
 
-### 🚧 In Progress  
-- Product plan (draft in parent folder)
-- Screen specifications (draft in parent folder)
+### 🚧 In Progress
+- API documentation
+- Testing guide
 
 ### 📋 Planned
-- API documentation
 - Deployment guide
 - Contributing guide
-- Testing guide
-- User flows
-- Market analysis
-- Business model details
+- User flows and journeys
+- Performance benchmarks
 
 ## 🔗 Related Files
+
+### In Documentation Folder
+- `docs/product/` - Product documentation (plan, screens, market, business model)
+- `docs/technical/` - Technical documentation (architecture, progress)
+- `docs/guides/` - Setup and usage guides
 
 ### In Project Root
 - `README.md` - Project overview
 - `SETUP_COMPLETE.md` - Setup status
-- Product plan documents
-- Screen specification documents
 
 ### In Code
 - Type definitions: `/types/models/`
