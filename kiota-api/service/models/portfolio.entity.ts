@@ -31,35 +31,35 @@ export class Portfolio {
 
   // Asset breakdown in USD
   @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
-  usdmValueUsd: number;
+  stableYieldsValueUsd: number;
 
   @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
-  bcspxValueUsd: number;
+  tokenizedStocksValueUsd: number;
 
   @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
-  paxgValueUsd: number;
+  tokenizedGoldValueUsd: number;
 
   @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
-  btcValueUsd: number;
+  blueChipCryptoValueUsd: number;
 
   @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
-  ethValueUsd: number;
+  gasBalanceValueUsd: number;
 
   // Current allocation percentages (calculated)
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
-  usdmPercent: number;
+  stableYieldsPercent: number;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
-  bcspxPercent: number;
+  tokenizedStocksPercent: number;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
-  paxgPercent: number;
+  tokenizedGoldPercent: number;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
-  btcPercent: number;
+  blueChipCryptoPercent: number;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
-  ethPercent: number;
+  gasBalancePercent: number;
 
   // Performance metrics
   @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
