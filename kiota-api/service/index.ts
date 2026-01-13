@@ -2,8 +2,16 @@ import express from "express";
 import http from "http";
 import dotenv from "dotenv";
 import cors from "cors";
-import corsOptions, { allowedOrigins } from "./configs/corsconfig";
+import corsOptions from "./configs/corsconfig";
 import AppDataSource from "./configs/ormconfig";
+
+// Import routes
+import authRoutes from "./routes/index.auth";
+import quizRoutes from "./routes/index.quiz";
+import walletRoutes from "./routes/index.wallet";
+import dashboardRoutes from "./routes/index.dashboard";
+import depositRoutes from "./routes/index.deposit";
+import portfolioRoutes from "./routes/index.portfolio";
 
 // Load environment variables
 dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
@@ -21,6 +29,12 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 // Routes
+app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/quiz", quizRoutes);
+app.use("/api/v1/wallet", walletRoutes);
+app.use("/api/v1/dashboard", dashboardRoutes);
+app.use("/api/v1/deposit", depositRoutes);
+app.use("/api/v1/portfolio", portfolioRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -28,6 +42,22 @@ app.get("/health", (req, res) => {
         status: "ok", 
         service: process.env.SERVICE_NAME,
         timestamp: new Date().toISOString()
+    });
+});
+
+// Root endpoint
+app.get("/", (req, res) => {
+    res.status(200).json({
+        service: process.env.SERVICE_NAME,
+        version: "1.0.0",
+        endpoints: {
+            auth: "/api/v1/auth",
+            quiz: "/api/v1/quiz",
+            wallet: "/api/v1/wallet",
+            dashboard: "/api/v1/dashboard",
+            deposit: "/api/v1/deposit",
+            portfolio: "/api/v1/portfolio"
+        }
     });
 });
 
@@ -57,6 +87,17 @@ async function startServer() {
         console.log(`🌍 Environment: ${app.get("env")}`);
         console.log(`🔗 URL: http://localhost:${PORT}`);
         console.log(`🔌 WebSocket: Enabled`);
+        console.log("═".repeat(50));
+        console.log("\n📋 Available Routes:");
+        console.log(`   • POST   /api/v1/auth/request-otp`);
+        console.log(`   • POST   /api/v1/auth/verify-otp`);
+        console.log(`   • POST   /api/v1/auth/google-login`);
+        console.log(`   • POST   /api/v1/quiz/submit`);
+        console.log(`   • POST   /api/v1/quiz/accept-strategy`);
+        console.log(`   • POST   /api/v1/wallet/create`);
+        console.log(`   • GET    /api/v1/dashboard`);
+        console.log(`   • POST   /api/v1/deposit/initiate`);
+        console.log(`   • GET    /api/v1/portfolio/detail`);
         console.log("═".repeat(50));
     });
 

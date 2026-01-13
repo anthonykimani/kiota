@@ -12,6 +12,15 @@ export class UserRepository {
         dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
     }
 
+    // General: Save user entity
+    async save(user: User): Promise<User> {
+        try {
+            return await this.repo.save(user);
+        } catch (error) {
+            throw error;
+        }
+    }
+
     // Screen 3: Sign Up / Login - check if phone exists
     async getByPhoneNumber(phoneNumber: string): Promise<User | null> {
         try {
