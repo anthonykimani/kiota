@@ -3,10 +3,6 @@ import AuthController from "../controllers/auth.controller";
 
 const router = express.Router();
 
-// Authentication
-router.post('/request-otp', AuthController.requestOTP);
-router.post('/verify-otp', AuthController.verifyOTP);
-
 // Google Auth
 router.post('/google-login', AuthController.googleSignIn);
 

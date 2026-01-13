@@ -156,6 +156,12 @@ export class User {
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  privyUserId: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  primaryAuthMethod: string; // 'phone', 'email', 'google', 'wallet'
+
   @CreateDateColumn()
   createdAt: Date;
 

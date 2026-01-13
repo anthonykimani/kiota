@@ -4,7 +4,6 @@ import WalletController from "../controllers/wallet.controller";
 const router = express.Router();
 
 // Wallet management
-router.post('/create', WalletController.createWallet);
 router.get('/info', WalletController.getWallet);
 router.get('/exists', WalletController.walletExists);
 

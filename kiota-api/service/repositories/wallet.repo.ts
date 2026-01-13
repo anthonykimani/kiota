@@ -12,33 +12,6 @@ export class WalletRepository {
         dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
     }
 
-    // Screen 8: Create wallet after strategy selection
-    async createWallet(data: {
-        userId: string;
-        address: string;
-        privyUserId?: string;
-    }): Promise<Wallet> {
-        try {
-            const wallet = this.repo.create({
-                userId: data.userId,
-                address: data.address.toLowerCase(),
-                provider: WalletProvider.PRIVY,
-                primaryChain: WalletChain.BASE,
-                privyUserId: data.privyUserId,
-                isActive: true,
-                usdcBalance: 0,
-                stableYieldBalance: 0,
-                tokenizedStocksBalance: 0,
-                tokenizedGoldBalance: 0,
-                gasBalance: 0
-            });
-
-            return await this.repo.save(wallet);
-        } catch (error) {
-            throw error;
-        }
-    }
-
     // Screen 8: Check if wallet already exists for user
     async getByUserId(userId: string): Promise<Wallet | null> {
         try {
@@ -81,6 +54,42 @@ export class WalletRepository {
             wallet.balancesLastUpdated = new Date();
 
             return await this.repo.save(wallet);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    async createFromPrivy(data: {
+        userId: string;
+        privyWalletId: string;
+        address: string;
+    }): Promise<Wallet> {
+        try {
+            const wallet = this.repo.create({
+                userId: data.userId,
+                address: data.address.toLowerCase(),
+                provider: WalletProvider.PRIVY,
+                primaryChain: WalletChain.BASE,
+                privyUserId: data.privyWalletId,
+                isActive: true,
+                usdcBalance: 0,
+                stableYieldBalance: 0,
+                tokenizedStocksBalance: 0,
+                tokenizedGoldBalance: 0,
+                gasBalance: 0
+            });
+
+            return await this.repo.save(wallet);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    async getByPrivyWalletId(privyWalletId: string): Promise<Wallet | null> {
+        try {
+            return await this.repo.findOne({
+                where: { privyUserId: privyWalletId, isActive: true }
+            });
         } catch (error) {
             throw error;
         }

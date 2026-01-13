@@ -150,4 +150,37 @@ export class UserRepository {
             throw error;
         }
     }
+
+    async getByPrivyUserId(privyUserId: string): Promise<User | null> {
+        return await this.repo.findOne({
+            where: { privyUserId, isActive: true }
+        });
+    }
+
+    async createFromPrivy(data: {
+        privyUserId: string;
+        phoneNumber?: string;
+        email?: string;
+        primaryAuthMethod: string;
+    }): Promise<User> {
+        const user = this.repo.create({
+            privyUserId: data.privyUserId,
+            phoneNumber: data.phoneNumber,
+            email: data.email,
+            primaryAuthMethod: data.primaryAuthMethod,
+            isActive: true,
+            hasCompletedOnboarding: false,
+            hasCompletedQuiz: false
+        });
+
+        return await this.repo.save(user);
+    }
+
+    async linkPrivyAccount(userId: string, privyUserId: string): Promise<User | null> {
+        const user = await this.getById(userId);
+        if (!user) return null;
+
+        user.privyUserId = privyUserId;
+        return await this.repo.save(user);
+    }
 }
