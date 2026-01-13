@@ -80,16 +80,16 @@ export class User {
 
   // Target Allocation (from AI recommendation)
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 80 })
-  targetUSDMPercent: number;
+  targetStableYieldsPercent: number;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 15 })
-  targetBCSPXPercent: number;
+  targetTokenizedStocksPercent: number;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 5 })
-  targetPAXGPercent: number;
+  targetTokenizedGoldPercent: number;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
-  targetBTCPercent: number;
+  targetBlueChipCryptoPercent: number;
 
   @Column({ type: 'varchar', length: 50, nullable: true })
   strategyName: string; // conservative_grower, balanced, wealth_maximizer, etc.

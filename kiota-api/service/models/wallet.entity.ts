@@ -9,18 +9,8 @@ import {
   Index,
 } from 'typeorm';
 import { User } from './user.entity';
+import { WalletChain, WalletProvider } from '../enums/Wallet';
 
-
-export enum WalletProvider {
-  PRIVY = 'privy',
-  EXTERNAL = 'external',
-}
-
-export enum WalletChain {
-  BASE = 'base',
-  CELO = 'celo',
-  ETHEREUM = 'ethereum',
-}
 
 @Entity('wallets')
 export class Wallet {
@@ -50,10 +40,10 @@ export class Wallet {
   primaryChain: WalletChain;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  privyUserId: string; // Privy's internal user ID
+  privyUserId: string; 
 
   @Column({ type: 'boolean', default: false })
-  isSmartAccount: boolean; // Account abstraction enabled
+  isSmartAccount: boolean; 
 
   @Column({ type: 'varchar', length: 42, nullable: true })
   smartAccountAddress: string; // If using AA
