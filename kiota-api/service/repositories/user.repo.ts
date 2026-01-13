@@ -1,7 +1,8 @@
 import { Repository } from "typeorm";
 import dotenv from "dotenv";
-import { User } from "../models/user.entity";
 import AppDataSource from "../configs/ormconfig";
+import { User } from "../models/user.entity";
+
 
 export class UserRepository {
     private repo: Repository<User>;
@@ -69,12 +70,12 @@ export class UserRepository {
             const user = await this.repo.findOne({ where: { id: userId } });
             if (!user) return null;
 
-            user.primaryGoal = answers.primaryGoal;
-            user.investmentTimeline = answers.investmentTimeline;
-            user.currentSavingsRange = answers.currentSavingsRange;
-            user.monthlySavingsRange = answers.monthlySavingsRange;
-            user.comfortableWithDollars = answers.comfortableWithDollars ?? true;
-            user.investmentPriorities = answers.investmentPriorities;
+            if (answers.primaryGoal !== undefined) user.primaryGoal = answers.primaryGoal;
+            if (answers.investmentTimeline !== undefined) user.investmentTimeline = answers.investmentTimeline;
+            if (answers.currentSavingsRange !== undefined) user.currentSavingsRange = answers.currentSavingsRange;
+            if (answers.monthlySavingsRange !== undefined) user.monthlySavingsRange = answers.monthlySavingsRange;
+            if (answers.comfortableWithDollars !== undefined) user.comfortableWithDollars = answers.comfortableWithDollars;
+            if (answers.investmentPriorities !== undefined) user.investmentPriorities = answers.investmentPriorities;
             user.hasCompletedQuiz = true;
 
             return await this.repo.save(user);
