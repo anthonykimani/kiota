@@ -54,19 +54,19 @@ export class AIAdvisorSession {
 
   // API details
   @Column({ type: 'varchar', length: 50, nullable: true })
-  modelUsed: string; // claude-sonnet-4-20250514
+  modelUsed?: string; // claude-sonnet-4-20250514
 
   @Column({ type: 'int', nullable: true })
-  inputTokens: number;
+  inputTokens?: number;
 
   @Column({ type: 'int', nullable: true })
-  outputTokens: number;
+  outputTokens?: number;
 
   @Column({ type: 'decimal', precision: 10, scale: 6, nullable: true })
   costUsd: number;
 
   @Column({ type: 'int', nullable: true })
-  latencyMs: number;
+  latencyMs?: number;
 
   // User feedback
   @Column({ type: 'boolean', nullable: true })

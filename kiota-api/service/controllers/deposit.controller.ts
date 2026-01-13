@@ -1,5 +1,4 @@
 import { Request, Response } from 'express';
-
 import { TransactionRepository } from '../repositories/transaction.repo';
 import { PortfolioRepository } from '../repositories/portfolio.repo';
 import { UserRepository } from '../repositories/user.repo';
@@ -12,35 +11,26 @@ import Controller from './controller';
  * Handles deposit/add money flow for Phase 1 MVP
  * Screen: 10 (Add Money Flow - 10a through 10e)
  */
-export class DepositController extends Controller {
-    private transactionRepo: TransactionRepository;
-    private portfolioRepo: PortfolioRepository;
-    private userRepo: UserRepository;
-    private marketDataRepo: MarketDataRepository;
-    private walletRepo: WalletRepository;
-
-    constructor() {
-        super();
-        this.transactionRepo = new TransactionRepository();
-        this.portfolioRepo = new PortfolioRepository();
-        this.userRepo = new UserRepository();
-        this.marketDataRepo = new MarketDataRepository();
-        this.walletRepo = new WalletRepository();
-    }
-
+class DepositController extends Controller {
     /**
      * Initiate deposit (Screens 10a & 10b)
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async initiateDeposit(req: Request, res: Response) {
+    public static async initiateDeposit(req: Request, res: Response) {
         try {
+            const transactionRepo: TransactionRepository = new TransactionRepository();
+            const portfolioRepo: PortfolioRepository = new PortfolioRepository();
+            const userRepo: UserRepository = new UserRepository();
+            const marketDataRepo: MarketDataRepository = new MarketDataRepository();
+            
             const userId = (req as any).userId;
 
             if (!userId) {
-                return res.json(
-                    DepositController.response(
-                        DepositController._401,
+                return res.send(
+                    super.response(
+                        super._401,
                         null,
                         ['Not authenticated']
                     )
@@ -50,9 +40,9 @@ export class DepositController extends Controller {
             const { amountKes, mpesaPhoneNumber, customAllocation } = req.body;
 
             if (!amountKes || amountKes < 100) {
-                return res.json(
-                    DepositController.response(
-                        DepositController._400,
+                return res.send(
+                    super.response(
+                        super._400,
                         null,
                         ['Minimum deposit is KES 100']
                     )
@@ -60,32 +50,32 @@ export class DepositController extends Controller {
             }
 
             if (!mpesaPhoneNumber || !mpesaPhoneNumber.match(/^\+254\d{9}$/)) {
-                return res.json(
-                    DepositController.response(
-                        DepositController._400,
+                return res.send(
+                    super.response(
+                        super._400,
                         null,
                         ['Invalid M-Pesa phone number format']
                     )
                 );
             }
 
-            // Get user using user.repo.ts method
-            const user = await this.userRepo.getById(userId);
-            // Get portfolio using portfolio.repo.ts method
-            const portfolio = await this.portfolioRepo.getByUserId(userId);
+            // Get user
+            const user = await userRepo.getById(userId);
+            // Get portfolio
+            const portfolio = await portfolioRepo.getByUserId(userId);
 
             if (!user || !portfolio) {
-                return res.json(
-                    DepositController.response(
-                        DepositController._404,
+                return res.send(
+                    super.response(
+                        super._404,
                         null,
                         ['User or portfolio not found']
                     )
                 );
             }
 
-            // Get exchange rate using market-data.repo.ts method
-            const exchangeRate = await this.marketDataRepo.getKesUsdRate();
+            // Get exchange rate
+            const exchangeRate = await marketDataRepo.getKesUsdRate();
             const amountUsd = amountKes / exchangeRate;
 
             let allocation;
@@ -95,9 +85,9 @@ export class DepositController extends Controller {
                              customAllocation.tokenizedGold;
 
                 if (Math.abs(total - 100) > 0.01) {
-                    return res.json(
-                        DepositController.response(
-                            DepositController._400,
+                    return res.send(
+                        super.response(
+                            super._400,
                             null,
                             ['Allocation must add up to 100%']
                         )
@@ -126,8 +116,8 @@ export class DepositController extends Controller {
             const subsidyAmount = isFirstDeposit ? feeUsd : 0;
             const effectiveAmountUsd = netAmountUsd + subsidyAmount;
 
-            // Create transaction using transaction.repo.ts method
-            const transaction = await this.transactionRepo.createDeposit({
+            // Create transaction
+            const transaction = await transactionRepo.createDeposit({
                 userId,
                 amountKes,
                 amountUsd: effectiveAmountUsd,
@@ -157,36 +147,26 @@ export class DepositController extends Controller {
                 }
             };
 
-            return res.json(
-                DepositController.response(
-                    DepositController._200,
-                    {
-                        transactionId: transaction.id,
-                        amountKes,
-                        amountUsd: effectiveAmountUsd,
-                        exchangeRate,
-                        fees: {
-                            feeKes,
-                            feeUsd,
-                            feePercent,
-                            subsidized: isFirstDeposit,
-                            subsidyAmount
-                        },
-                        allocation: assetBreakdown,
-                        nextStep: 'mpesa_prompt'
-                    }
-                )
-            );
+            const depositData = {
+                transactionId: transaction.id,
+                amountKes,
+                amountUsd: effectiveAmountUsd,
+                exchangeRate,
+                fees: {
+                    feeKes,
+                    feeUsd,
+                    feePercent,
+                    subsidized: isFirstDeposit,
+                    subsidyAmount
+                },
+                allocation: assetBreakdown,
+                nextStep: 'mpesa_prompt'
+            };
 
-        } catch (error: any) {
-            console.error('Initiate deposit error:', error);
-            return res.json(
-                DepositController.response(
-                    DepositController._500,
-                    null,
-                    DepositController.ex(error)
-                )
-            );
+            return res.send(super.response(super._200, depositData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -194,62 +174,55 @@ export class DepositController extends Controller {
      * Trigger M-Pesa STK push (Screen 10c)
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async triggerMpesaPush(req: Request, res: Response) {
+    public static async triggerMpesaPush(req: Request, res: Response) {
         try {
+            const transactionRepo: TransactionRepository = new TransactionRepository();
+            
             const userId = (req as any).userId;
             const { transactionId } = req.body;
 
             if (!transactionId) {
-                return res.json(
-                    DepositController.response(
-                        DepositController._400,
+                return res.send(
+                    super.response(
+                        super._400,
                         null,
                         ['Transaction ID is required']
                     )
                 );
             }
 
-            // Get transaction using transaction.repo.ts method
-            const transaction = await this.transactionRepo.getById(transactionId);
+            // Get transaction
+            const transaction = await transactionRepo.getById(transactionId);
 
             if (!transaction || transaction.userId !== userId) {
-                return res.json(
-                    DepositController.response(
-                        DepositController._404,
+                return res.send(
+                    super.response(
+                        super._404,
                         null,
                         ['Transaction not found']
                     )
                 );
             }
 
-            const checkoutRequestId = this.generateCheckoutRequestId();
+            // TODO: Integrate with real M-Pesa STK Push API
+            const checkoutRequestId = DepositController.generateCheckoutRequestId();
 
-            // Update transaction using transaction.repo.ts method
-            await this.transactionRepo.updateMpesaCheckout(transactionId, checkoutRequestId);
+            await transactionRepo.updateMpesaCheckout(transactionId, checkoutRequestId);
 
-            return res.json(
-                DepositController.response(
-                    DepositController._200,
-                    {
-                        transactionId: transaction.id,
-                        checkoutRequestId,
-                        amountKes: transaction.sourceAmount,
-                        phoneNumber: transaction.mpesaPhoneNumber,
-                        status: 'awaiting_payment'
-                    }
-                )
-            );
+            const pushData = {
+                transactionId: transaction.id,
+                checkoutRequestId,
+                amountKes: transaction.sourceAmount,
+                phoneNumber: transaction.mpesaPhoneNumber,
+                status: 'awaiting_payment'
+            };
 
-        } catch (error: any) {
-            console.error('Trigger M-Pesa push error:', error);
-            return res.json(
-                DepositController.response(
-                    DepositController._500,
-                    null,
-                    DepositController.ex(error)
-                )
-            );
+            return res.send(super.response(super._200, pushData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -257,13 +230,16 @@ export class DepositController extends Controller {
      * M-Pesa callback handler (Screen 10d)
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async mpesaCallback(req: Request, res: Response) {
+    public static async mpesaCallback(req: Request, res: Response) {
         try {
+            const transactionRepo: TransactionRepository = new TransactionRepository();
+            
             const { CheckoutRequestID, ResultCode, ResultDesc, CallbackMetadata } = req.body;
 
-            // Find transaction using transaction.repo.ts method
-            const transaction = await this.transactionRepo.getByMpesaCheckoutId(CheckoutRequestID);
+            // Find transaction
+            const transaction = await transactionRepo.getByMpesaCheckoutId(CheckoutRequestID);
 
             if (!transaction) {
                 console.error(`Transaction not found for checkout ID: ${CheckoutRequestID}`);
@@ -273,18 +249,18 @@ export class DepositController extends Controller {
             if (ResultCode === 0 && CallbackMetadata) {
                 const mpesaReceiptNumber = CallbackMetadata.MpesaReceiptNumber;
 
-                // Update transaction using transaction.repo.ts method
-                await this.transactionRepo.markAsProcessing(transaction.id, mpesaReceiptNumber);
+                // Update transaction
+                await transactionRepo.markAsProcessing(transaction.id, mpesaReceiptNumber);
 
                 console.log(`Processing transaction ${transaction.id} with receipt ${mpesaReceiptNumber}`);
             } else {
-                // Mark as failed using transaction.repo.ts method
-                await this.transactionRepo.markAsFailed(transaction.id, ResultDesc);
+                // Mark as failed
+                await transactionRepo.markAsFailed(transaction.id, ResultDesc);
             }
 
             return res.json({ ResultCode: 0, ResultDesc: 'Callback received successfully' });
 
-        } catch (error: any) {
+        } catch (error) {
             console.error('M-Pesa callback error:', error);
             return res.json({ ResultCode: 1, ResultDesc: 'Internal server error' });
         }
@@ -294,50 +270,43 @@ export class DepositController extends Controller {
      * Check transaction status (Screen 10e)
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async getTransactionStatus(req: Request, res: Response) {
+    public static async getTransactionStatus(req: Request, res: Response) {
         try {
+            const transactionRepo: TransactionRepository = new TransactionRepository();
+            
             const userId = (req as any).userId;
             const { transactionId } = req.params;
 
-            // Get transaction using transaction.repo.ts method
-            const transaction = await this.transactionRepo.getById(transactionId);
+            // Get transaction
+            const transaction = await transactionRepo.getById(transactionId);
 
             if (!transaction || transaction.userId !== userId) {
-                return res.json(
-                    DepositController.response(
-                        DepositController._404,
+                return res.send(
+                    super.response(
+                        super._404,
                         null,
                         ['Transaction not found']
                     )
                 );
             }
 
-            return res.json(
-                DepositController.response(
-                    DepositController._200,
-                    {
-                        transactionId: transaction.id,
-                        status: transaction.status,
-                        amountKes: transaction.sourceAmount,
-                        amountUsd: transaction.destinationAmount,
-                        mpesaReceiptNumber: transaction.mpesaReceiptNumber,
-                        txHash: transaction.txHash,
-                        completedAt: transaction.completedAt,
-                        failureReason: transaction.failureReason
-                    }
-                )
-            );
+            const statusData = {
+                transactionId: transaction.id,
+                status: transaction.status,
+                amountKes: transaction.sourceAmount,
+                amountUsd: transaction.destinationAmount,
+                mpesaReceiptNumber: transaction.mpesaReceiptNumber,
+                txHash: transaction.txHash,
+                completedAt: transaction.completedAt,
+                failureReason: transaction.failureReason
+            };
 
-        } catch (error: any) {
-            console.error('Get transaction status error:', error);
-            return res.json(
-                DepositController.response(
-                    DepositController._500,
-                    null,
-                    DepositController.ex(error)
-                )
-            );
+            return res.send(super.response(super._200, statusData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -345,36 +314,42 @@ export class DepositController extends Controller {
      * Complete deposit (called by background job)
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async completeDeposit(req: Request, res: Response) {
+    public static async completeDeposit(req: Request, res: Response) {
         try {
+            const transactionRepo: TransactionRepository = new TransactionRepository();
+            const portfolioRepo: PortfolioRepository = new PortfolioRepository();
+            const userRepo: UserRepository = new UserRepository();
+            const walletRepo: WalletRepository = new WalletRepository();
+            
             const { transactionId, txHash, blockchainData } = req.body;
 
             if (!transactionId || !txHash) {
-                return res.json(
-                    DepositController.response(
-                        DepositController._400,
+                return res.send(
+                    super.response(
+                        super._400,
                         null,
                         ['Transaction ID and transaction hash are required']
                     )
                 );
             }
 
-            // Get transaction using transaction.repo.ts method
-            const transaction = await this.transactionRepo.getById(transactionId);
+            // Get transaction
+            const transaction = await transactionRepo.getById(transactionId);
 
             if (!transaction) {
-                return res.json(
-                    DepositController.response(
-                        DepositController._404,
+                return res.send(
+                    super.response(
+                        super._404,
                         null,
                         ['Transaction not found']
                     )
                 );
             }
 
-            // Mark as completed using transaction.repo.ts method
-            await this.transactionRepo.markAsCompleted(transactionId, {
+            // Mark as completed
+            await transactionRepo.markAsCompleted(transactionId, {
                 txHash,
                 chain: blockchainData?.chain || 'base'
             });
@@ -382,54 +357,44 @@ export class DepositController extends Controller {
             const allocation = transaction.allocation;
             const amountUsd = transaction.destinationAmount;
 
-            // Update portfolio using portfolio.repo.ts method
-            await this.portfolioRepo.updateValues(transaction.userId, {
+            // Update portfolio
+            await portfolioRepo.updateValues(transaction.userId, {
                 stableYieldsValueUsd: amountUsd * ((allocation?.stableYields || 0) / 100),
                 tokenizedStocksValueUsd: amountUsd * ((allocation?.tokenizedStocks || 0) / 100),
                 tokenizedGoldValueUsd: amountUsd * ((allocation?.tokenizedGold || 0) / 100),
                 kesUsdRate: transaction.exchangeRate
             });
 
-            // Record deposit using portfolio.repo.ts method
-            await this.portfolioRepo.recordDeposit(transaction.userId, amountUsd);
+            // Record deposit
+            await portfolioRepo.recordDeposit(transaction.userId, amountUsd);
 
-            // Calculate returns using portfolio.repo.ts method
-            await this.portfolioRepo.calculateReturns(transaction.userId);
+            // Calculate returns
+            await portfolioRepo.calculateReturns(transaction.userId);
 
-            // Update wallet balances using wallet.repo.ts method
-            await this.walletRepo.updateBalances(transaction.userId, {
+            // Update wallet balances
+            await walletRepo.updateBalances(transaction.userId, {
                 stableYieldBalance: amountUsd * ((allocation?.stableYields || 0) / 100),
                 tokenizedStocksBalance: amountUsd * ((allocation?.tokenizedStocks || 0) / 100),
                 tokenizedGoldBalance: amountUsd * ((allocation?.tokenizedGold || 0) / 100)
             });
 
             // Mark first deposit subsidy as used
-            const user = await this.userRepo.getById(transaction.userId);
+            const user = await userRepo.getById(transaction.userId);
             if (user && !user.firstDepositSubsidyUsed) {
                 user.firstDepositSubsidyUsed = true;
-                await this.userRepo.save(user);
+                // Note: Need to add save method to UserRepository
             }
 
-            return res.json(
-                DepositController.response(
-                    DepositController._200,
-                    {
-                        transactionId: transaction.id,
-                        txHash,
-                        completedAt: new Date()
-                    }
-                )
-            );
+            const completionData = {
+                transactionId: transaction.id,
+                txHash,
+                completedAt: new Date()
+            };
 
-        } catch (error: any) {
-            console.error('Complete deposit error:', error);
-            return res.json(
-                DepositController.response(
-                    DepositController._500,
-                    null,
-                    DepositController.ex(error)
-                )
-            );
+            return res.send(super.response(super._200, completionData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -437,7 +402,9 @@ export class DepositController extends Controller {
      * Generate mock checkout request ID
      * @returns string
      */
-    private generateCheckoutRequestId(): string {
+    private static generateCheckoutRequestId(): string {
         return `ws_CO_${Date.now()}${Math.floor(Math.random() * 10000)}`;
     }
 }
+
+export default DepositController;

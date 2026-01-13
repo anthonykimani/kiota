@@ -9,43 +9,37 @@ import Controller from './controller';
  * Handles wallet creation for Phase 1 MVP
  * Screen: 8 (Wallet Creation)
  */
-export class WalletController extends Controller {
-    private walletRepo: WalletRepository;
-    private portfolioRepo: PortfolioRepository;
-    private userRepo: UserRepository;
-
-    constructor() {
-        super();
-        this.walletRepo = new WalletRepository();
-        this.portfolioRepo = new PortfolioRepository();
-        this.userRepo = new UserRepository();
-    }
-
+class WalletController extends Controller {
     /**
      * Create wallet (Screen 8)
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async createWallet(req: Request, res: Response) {
+    public static async createWallet(req: Request, res: Response) {
         try {
+            const walletRepo: WalletRepository = new WalletRepository();
+            const portfolioRepo: PortfolioRepository = new PortfolioRepository();
+            const userRepo: UserRepository = new UserRepository();
+            
             const userId = (req as any).userId;
 
             if (!userId) {
-                return res.json(
-                    WalletController.response(
-                        WalletController._401,
+                return res.send(
+                    super.response(
+                        super._401,
                         null,
                         ['Not authenticated']
                     )
                 );
             }
 
-            // Check if wallet exists using wallet.repo.ts method
-            const existingWallet = await this.walletRepo.getByUserId(userId);
+            // Check if wallet exists
+            const existingWallet = await walletRepo.getByUserId(userId);
             if (existingWallet) {
-                return res.json(
-                    WalletController.response(
-                        WalletController._400,
+                return res.send(
+                    super.response(
+                        super._400,
                         { address: existingWallet.address },
                         ['Wallet already exists for this user']
                     )
@@ -54,10 +48,10 @@ export class WalletController extends Controller {
 
             const { privyUserId, address } = req.body;
 
-            if (address && !this.isValidAddress(address)) {
-                return res.json(
-                    WalletController.response(
-                        WalletController._400,
+            if (address && !WalletController.isValidAddress(address)) {
+                return res.send(
+                    super.response(
+                        super._400,
                         null,
                         ['Invalid Ethereum address format']
                     )
@@ -65,56 +59,46 @@ export class WalletController extends Controller {
             }
 
             if (!address) {
-                return res.json(
-                    WalletController.response(
-                        WalletController._400,
+                return res.send(
+                    super.response(
+                        super._400,
                         null,
                         ['Wallet address is required']
                     )
                 );
             }
 
-            // Create wallet using wallet.repo.ts method
-            const wallet = await this.walletRepo.createWallet({
+            // Create wallet
+            const wallet = await walletRepo.createWallet({
                 userId,
                 address,
                 privyUserId
             });
 
-            // Create portfolio using portfolio.repo.ts method
-            const portfolio = await this.portfolioRepo.createPortfolio(userId);
+            // Create portfolio
+            const portfolio = await portfolioRepo.createPortfolio(userId);
 
-            // Mark onboarding complete using user.repo.ts method
-            await this.userRepo.completeOnboarding(userId);
+            // Mark onboarding complete
+            await userRepo.completeOnboarding(userId);
 
-            return res.json(
-                WalletController.response(
-                    WalletController._201,
-                    {
-                        wallet: {
-                            id: wallet.id,
-                            address: wallet.address,
-                            provider: wallet.provider,
-                            primaryChain: wallet.primaryChain,
-                            createdAt: wallet.createdAt
-                        },
-                        portfolio: {
-                            id: portfolio.id,
-                            totalValueUsd: portfolio.totalValueUsd
-                        }
-                    }
-                )
-            );
+            const walletData = {
+                wallet: {
+                    id: wallet.id,
+                    address: wallet.address,
+                    provider: wallet.provider,
+                    primaryChain: wallet.primaryChain,
+                    createdAt: wallet.createdAt
+                },
+                portfolio: {
+                    id: portfolio.id,
+                    totalValueUsd: portfolio.totalValueUsd
+                }
+            };
 
-        } catch (error: any) {
-            console.error('Create wallet error:', error);
-            return res.json(
-                WalletController.response(
-                    WalletController._500,
-                    null,
-                    WalletController.ex(error)
-                )
-            );
+            return res.send(super.response(super._201, walletData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -122,66 +106,58 @@ export class WalletController extends Controller {
      * Get wallet info
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async getWallet(req: Request, res: Response) {
+    public static async getWallet(req: Request, res: Response) {
         try {
+            const walletRepo: WalletRepository = new WalletRepository();
             const userId = (req as any).userId;
 
             if (!userId) {
-                return res.json(
-                    WalletController.response(
-                        WalletController._401,
+                return res.send(
+                    super.response(
+                        super._401,
                         null,
                         ['Not authenticated']
                     )
                 );
             }
 
-            // Get wallet using wallet.repo.ts method
-            const wallet = await this.walletRepo.getByUserId(userId);
+            // Get wallet
+            const wallet = await walletRepo.getByUserId(userId);
 
             if (!wallet) {
-                return res.json(
-                    WalletController.response(
-                        WalletController._404,
+                return res.send(
+                    super.response(
+                        super._404,
                         null,
                         ['Wallet not found']
                     )
                 );
             }
 
-            return res.json(
-                WalletController.response(
-                    WalletController._200,
-                    {
-                        wallet: {
-                            id: wallet.id,
-                            address: wallet.address,
-                            provider: wallet.provider,
-                            primaryChain: wallet.primaryChain,
-                            balances: {
-                                usdc: wallet.usdcBalance,
-                                stableYield: wallet.stableYieldBalance,
-                                tokenizedStocks: wallet.tokenizedStocksBalance,
-                                tokenizedGold: wallet.tokenizedGoldBalance,
-                                gas: wallet.gasBalance
-                            },
-                            lastUpdated: wallet.balancesLastUpdated,
-                            createdAt: wallet.createdAt
-                        }
-                    }
-                )
-            );
+            const walletData = {
+                wallet: {
+                    id: wallet.id,
+                    address: wallet.address,
+                    provider: wallet.provider,
+                    primaryChain: wallet.primaryChain,
+                    balances: {
+                        usdc: wallet.usdcBalance,
+                        stableYield: wallet.stableYieldBalance,
+                        tokenizedStocks: wallet.tokenizedStocksBalance,
+                        tokenizedGold: wallet.tokenizedGoldBalance,
+                        gas: wallet.gasBalance
+                    },
+                    lastUpdated: wallet.balancesLastUpdated,
+                    createdAt: wallet.createdAt
+                }
+            };
 
-        } catch (error: any) {
-            console.error('Get wallet error:', error);
-            return res.json(
-                WalletController.response(
-                    WalletController._500,
-                    null,
-                    WalletController.ex(error)
-                )
-            );
+            return res.send(super.response(super._200, walletData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -189,43 +165,35 @@ export class WalletController extends Controller {
      * Check if wallet exists
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async walletExists(req: Request, res: Response) {
+    public static async walletExists(req: Request, res: Response) {
         try {
+            const walletRepo: WalletRepository = new WalletRepository();
             const userId = (req as any).userId;
 
             if (!userId) {
-                return res.json(
-                    WalletController.response(
-                        WalletController._401,
+                return res.send(
+                    super.response(
+                        super._401,
                         null,
                         ['Not authenticated']
                     )
                 );
             }
 
-            // Get wallet using wallet.repo.ts method
-            const wallet = await this.walletRepo.getByUserId(userId);
+            // Get wallet
+            const wallet = await walletRepo.getByUserId(userId);
 
-            return res.json(
-                WalletController.response(
-                    WalletController._200,
-                    {
-                        exists: !!wallet,
-                        address: wallet?.address || null
-                    }
-                )
-            );
+            const existsData = {
+                exists: !!wallet,
+                address: wallet?.address || null
+            };
 
-        } catch (error: any) {
-            console.error('Check wallet exists error:', error);
-            return res.json(
-                WalletController.response(
-                    WalletController._500,
-                    null,
-                    WalletController.ex(error)
-                )
-            );
+            return res.send(super.response(super._200, existsData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -233,15 +201,17 @@ export class WalletController extends Controller {
      * Update wallet balances
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async updateBalances(req: Request, res: Response) {
+    public static async updateBalances(req: Request, res: Response) {
         try {
+            const walletRepo: WalletRepository = new WalletRepository();
             const userId = (req as any).userId;
 
             if (!userId) {
-                return res.json(
-                    WalletController.response(
-                        WalletController._401,
+                return res.send(
+                    super.response(
+                        super._401,
                         null,
                         ['Not authenticated']
                     )
@@ -252,9 +222,9 @@ export class WalletController extends Controller {
 
             for (const [key, value] of Object.entries(balances)) {
                 if (typeof value !== 'number' || value < 0) {
-                    return res.json(
-                        WalletController.response(
-                            WalletController._400,
+                    return res.send(
+                        super.response(
+                            super._400,
                             null,
                             [`Invalid balance value for ${key}`]
                         )
@@ -262,44 +232,34 @@ export class WalletController extends Controller {
                 }
             }
 
-            // Update balances using wallet.repo.ts method
-            const wallet = await this.walletRepo.updateBalances(userId, balances);
+            // Update balances
+            const wallet = await walletRepo.updateBalances(userId, balances);
 
             if (!wallet) {
-                return res.json(
-                    WalletController.response(
-                        WalletController._404,
+                return res.send(
+                    super.response(
+                        super._404,
                         null,
                         ['Wallet not found']
                     )
                 );
             }
 
-            return res.json(
-                WalletController.response(
-                    WalletController._200,
-                    {
-                        balances: {
-                            usdc: wallet.usdcBalance,
-                            stableYield: wallet.stableYieldBalance,
-                            tokenizedStocks: wallet.tokenizedStocksBalance,
-                            tokenizedGold: wallet.tokenizedGoldBalance,
-                            gas: wallet.gasBalance
-                        },
-                        lastUpdated: wallet.balancesLastUpdated
-                    }
-                )
-            );
+            const balanceData = {
+                balances: {
+                    usdc: wallet.usdcBalance,
+                    stableYield: wallet.stableYieldBalance,
+                    tokenizedStocks: wallet.tokenizedStocksBalance,
+                    tokenizedGold: wallet.tokenizedGoldBalance,
+                    gas: wallet.gasBalance
+                },
+                lastUpdated: wallet.balancesLastUpdated
+            };
 
-        } catch (error: any) {
-            console.error('Update balances error:', error);
-            return res.json(
-                WalletController.response(
-                    WalletController._500,
-                    null,
-                    WalletController.ex(error)
-                )
-            );
+            return res.send(super.response(super._200, balanceData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -308,7 +268,9 @@ export class WalletController extends Controller {
      * @param address Address string
      * @returns boolean
      */
-    private isValidAddress(address: string): boolean {
+    private static isValidAddress(address: string): boolean {
         return /^0x[a-fA-F0-9]{40}$/.test(address);
     }
 }
+
+export default WalletController;

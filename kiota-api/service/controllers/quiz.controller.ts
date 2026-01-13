@@ -9,34 +9,24 @@ import Controller from './controller';
  * Handles investment strategy quiz for Phase 1 MVP
  * Screens: 5 (Investment Strategy Quiz), 6 (AI Strategy Result)
  */
-export class QuizController extends Controller {
-    private userRepo: UserRepository;
-    private aiSessionRepo: AIAdvisorSessionRepository;
-    private anthropic: Anthropic;
-
-    constructor() {
-        super();
-        this.userRepo = new UserRepository();
-        this.aiSessionRepo = new AIAdvisorSessionRepository();
-        
-        this.anthropic = new Anthropic({
-            apiKey: process.env.ANTHROPIC_API_KEY
-        });
-    }
-
+class QuizController extends Controller {
     /**
      * Submit quiz answers and generate AI strategy (Screen 5)
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async submitQuiz(req: Request, res: Response) {
+    public static async submitQuiz(req: Request, res: Response) {
         try {
+            const userRepo: UserRepository = new UserRepository();
+            const aiSessionRepo: AIAdvisorSessionRepository = new AIAdvisorSessionRepository();
+            
             const userId = (req as any).userId;
 
             if (!userId) {
-                return res.json(
-                    QuizController.response(
-                        QuizController._401,
+                return res.send(
+                    super.response(
+                        super._401,
                         null,
                         ['Not authenticated']
                     )
@@ -55,17 +45,17 @@ export class QuizController extends Controller {
             } = req.body;
 
             if (!goal || !timeline || !riskTolerance || !investmentExperience) {
-                return res.json(
-                    QuizController.response(
-                        QuizController._400,
+                return res.send(
+                    super.response(
+                        super._400,
                         null,
                         ['All quiz questions must be answered']
                     )
                 );
             }
 
-            // Save quiz answers using user.repo.ts method
-            await this.userRepo.saveQuizAnswers(userId, {
+            // Save quiz answers
+            await userRepo.saveQuizAnswers(userId, {
                 primaryGoal: goal,
                 investmentTimeline: timeline,
                 riskTolerance: riskTolerance,
@@ -76,8 +66,8 @@ export class QuizController extends Controller {
                 investmentPriorities: priorities || []
             });
 
-            // Create AI session using advisor-session.repo.ts method
-            const aiSession = await this.aiSessionRepo.createQuizSession(userId, {
+            // Create AI session
+            const aiSession = await aiSessionRepo.createQuizSession(userId, {
                 goal,
                 timeline,
                 riskTolerance,
@@ -89,7 +79,7 @@ export class QuizController extends Controller {
             });
 
             // Generate strategy using Claude AI
-            const strategy = await this.generateStrategy({
+            const strategy = await QuizController.generateStrategy({
                 goal,
                 timeline,
                 riskTolerance,
@@ -100,8 +90,8 @@ export class QuizController extends Controller {
                 priorities
             });
 
-            // Save AI response using advisor-session.repo.ts method
-            await this.aiSessionRepo.saveStrategyResponse(aiSession.id, {
+            // Save AI response
+            await aiSessionRepo.saveStrategyResponse(aiSession.id, {
                 allocation: strategy.allocation,
                 strategyName: strategy.strategyName,
                 rationale: strategy.rationale,
@@ -114,40 +104,30 @@ export class QuizController extends Controller {
                 latencyMs: strategy.latencyMs
             });
 
-            // Save strategy using user.repo.ts method
-            await this.userRepo.saveStrategy(userId, {
+            // Save strategy
+            await userRepo.saveStrategy(userId, {
                 targetStableYieldsPercent: strategy.allocation.stableYields,
                 targetTokenizedStocksPercent: strategy.allocation.tokenizedStocks,
                 targetTokenizedGoldPercent: strategy.allocation.tokenizedGold,
                 strategyName: strategy.strategyName
             });
 
-            return res.json(
-                QuizController.response(
-                    QuizController._200,
-                    {
-                        sessionId: aiSession.id,
-                        strategy: {
-                            name: strategy.strategyName,
-                            allocation: strategy.allocation,
-                            rationale: strategy.rationale,
-                            expectedReturn: strategy.expectedReturn,
-                            riskLevel: strategy.riskLevel,
-                            assets: strategy.defaultAssets
-                        }
-                    }
-                )
-            );
+            const quizData = {
+                sessionId: aiSession.id,
+                strategy: {
+                    name: strategy.strategyName,
+                    allocation: strategy.allocation,
+                    rationale: strategy.rationale,
+                    expectedReturn: strategy.expectedReturn,
+                    riskLevel: strategy.riskLevel,
+                    assets: strategy.defaultAssets
+                }
+            };
 
-        } catch (error: any) {
-            console.error('Submit quiz error:', error);
-            return res.json(
-                QuizController.response(
-                    QuizController._500,
-                    null,
-                    QuizController.ex(error)
-                )
-            );
+            return res.send(super.response(super._200, quizData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -155,24 +135,28 @@ export class QuizController extends Controller {
      * Accept or customize strategy (Screen 6)
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async acceptStrategy(req: Request, res: Response) {
+    public static async acceptStrategy(req: Request, res: Response) {
         try {
+            const userRepo: UserRepository = new UserRepository();
+            const aiSessionRepo: AIAdvisorSessionRepository = new AIAdvisorSessionRepository();
+            
             const userId = (req as any).userId;
             const { sessionId, accepted, customAllocation } = req.body;
 
             if (!sessionId) {
-                return res.json(
-                    QuizController.response(
-                        QuizController._400,
+                return res.send(
+                    super.response(
+                        super._400,
                         null,
                         ['Session ID is required']
                     )
                 );
             }
 
-            // Record user decision using advisor-session.repo.ts method
-            await this.aiSessionRepo.recordUserDecision(sessionId, accepted);
+            // Record user decision
+            await aiSessionRepo.recordUserDecision(sessionId, accepted);
 
             if (customAllocation) {
                 const total = customAllocation.stableYields + 
@@ -180,17 +164,17 @@ export class QuizController extends Controller {
                              customAllocation.tokenizedGold;
 
                 if (Math.abs(total - 100) > 0.01) {
-                    return res.json(
-                        QuizController.response(
-                            QuizController._400,
+                    return res.send(
+                        super.response(
+                            super._400,
                             null,
                             ['Allocation must add up to 100%']
                         )
                     );
                 }
 
-                // Save custom strategy using user.repo.ts method
-                await this.userRepo.saveStrategy(userId, {
+                // Save custom strategy
+                await userRepo.saveStrategy(userId, {
                     targetStableYieldsPercent: customAllocation.stableYields,
                     targetTokenizedStocksPercent: customAllocation.tokenizedStocks,
                     targetTokenizedGoldPercent: customAllocation.tokenizedGold,
@@ -198,25 +182,15 @@ export class QuizController extends Controller {
                 });
             }
 
-            return res.json(
-                QuizController.response(
-                    QuizController._200,
-                    {
-                        accepted,
-                        nextStep: 'wallet_creation'
-                    }
-                )
-            );
+            const strategyData = {
+                accepted,
+                nextStep: 'wallet_creation'
+            };
 
-        } catch (error: any) {
-            console.error('Accept strategy error:', error);
-            return res.json(
-                QuizController.response(
-                    QuizController._500,
-                    null,
-                    QuizController.ex(error)
-                )
-            );
+            return res.send(super.response(super._200, strategyData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -224,47 +198,39 @@ export class QuizController extends Controller {
      * Get latest quiz session
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async getLatestSession(req: Request, res: Response) {
+    public static async getLatestSession(req: Request, res: Response) {
         try {
+            const aiSessionRepo: AIAdvisorSessionRepository = new AIAdvisorSessionRepository();
             const userId = (req as any).userId;
 
-            // Get latest session using advisor-session.repo.ts method
-            const session = await this.aiSessionRepo.getLatestQuizSession(userId);
+            // Get latest session
+            const session = await aiSessionRepo.getLatestQuizSession(userId);
 
             if (!session) {
-                return res.json(
-                    QuizController.response(
-                        QuizController._404,
+                return res.send(
+                    super.response(
+                        super._404,
                         null,
                         ['No quiz session found']
                     )
                 );
             }
 
-            return res.json(
-                QuizController.response(
-                    QuizController._200,
-                    {
-                        session: {
-                            id: session.id,
-                            createdAt: session.createdAt,
-                            aiResponse: session.aiResponse,
-                            userAccepted: session.userAccepted
-                        }
-                    }
-                )
-            );
+            const sessionData = {
+                session: {
+                    id: session.id,
+                    createdAt: session.createdAt,
+                    aiResponse: session.aiResponse,
+                    userAccepted: session.userAccepted
+                }
+            };
 
-        } catch (error: any) {
-            console.error('Get latest session error:', error);
-            return res.json(
-                QuizController.response(
-                    QuizController._500,
-                    null,
-                    QuizController.ex(error)
-                )
-            );
+            return res.send(super.response(super._200, sessionData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -273,7 +239,7 @@ export class QuizController extends Controller {
      * @param profile User profile data
      * @returns Strategy object
      */
-    private async generateStrategy(profile: any): Promise<any> {
+    private static async generateStrategy(profile: any): Promise<any> {
         const startTime = Date.now();
 
         const prompt = `You are a Kenyan investment advisor. Analyze this user profile and recommend a category allocation.
@@ -312,7 +278,11 @@ Generate a strategy with allocation percentages and return as JSON:
 }`;
 
         try {
-            const response = await this.anthropic.messages.create({
+            const anthropic = new Anthropic({
+                apiKey: process.env.ANTHROPIC_API_KEY
+            });
+
+            const response = await anthropic.messages.create({
                 model: 'claude-sonnet-4-20250514',
                 max_tokens: 1500,
                 messages: [{ role: 'user', content: prompt }]
@@ -341,7 +311,7 @@ Generate a strategy with allocation percentages and return as JSON:
 
         } catch (error: any) {
             console.error('Claude AI error:', error);
-            return this.getFallbackStrategy();
+            return QuizController.getFallbackStrategy();
         }
     }
 
@@ -349,7 +319,7 @@ Generate a strategy with allocation percentages and return as JSON:
      * Fallback strategy if Claude AI fails
      * @returns Default strategy
      */
-    private getFallbackStrategy(): any {
+    private static getFallbackStrategy(): any {
         return {
             allocation: {
                 stableYields: 80,
@@ -369,3 +339,5 @@ Generate a strategy with allocation percentages and return as JSON:
         };
     }
 }
+
+export default QuizController;

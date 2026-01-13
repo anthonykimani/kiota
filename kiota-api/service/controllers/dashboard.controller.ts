@@ -10,70 +10,63 @@ import Controller from './controller';
  * Handles dashboard/home screen for Phase 1 MVP
  * Screen: 9 (Dashboard - Home Screen)
  */
-export class DashboardController extends Controller {
-    private userRepo: UserRepository;
-    private portfolioRepo: PortfolioRepository;
-    private goalRepo: GoalRepository;
-    private marketDataRepo: MarketDataRepository;
-
-    constructor() {
-        super();
-        this.userRepo = new UserRepository();
-        this.portfolioRepo = new PortfolioRepository();
-        this.goalRepo = new GoalRepository();
-        this.marketDataRepo = new MarketDataRepository();
-    }
-
+class DashboardController extends Controller {
     /**
      * Get dashboard data (Screen 9)
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async getDashboard(req: Request, res: Response) {
+    public static async getDashboard(req: Request, res: Response) {
         try {
+            const userRepo: UserRepository = new UserRepository();
+            const portfolioRepo: PortfolioRepository = new PortfolioRepository();
+            const goalRepo: GoalRepository = new GoalRepository();
+            const marketDataRepo: MarketDataRepository = new MarketDataRepository();
+            
             const userId = (req as any).userId;
 
             if (!userId) {
-                return res.json(
-                    DashboardController.response(
-                        DashboardController._401,
+                return res.send(
+                    super.response(
+                        super._401,
                         null,
                         ['Not authenticated']
                     )
                 );
             }
 
-            // Get user with relations using user.repo.ts method
-            const user = await this.userRepo.getWithWalletAndPortfolio(userId);
+            // Get user with relations
+            const user = await userRepo.getWithWalletAndPortfolio(userId);
 
             if (!user) {
-                return res.json(
-                    DashboardController.response(
-                        DashboardController._404,
+                return res.send(
+                    super.response(
+                        super._404,
                         null,
                         ['User not found']
                     )
                 );
             }
 
-            // Get portfolio using portfolio.repo.ts method
-            const portfolio = await this.portfolioRepo.getByUserId(userId);
+            // Get portfolio
+            const portfolio = await portfolioRepo.getByUserId(userId);
 
             if (!portfolio) {
-                return res.json(
-                    DashboardController.response(
-                        DashboardController._404,
+                return res.send(
+                    super.response(
+                        super._404,
                         null,
                         ['Portfolio not found']
                     )
                 );
             }
 
-            // Get active goals using goal.repo.ts method
-            const goals = await this.goalRepo.getActiveByUser(userId, 3);
+            // Get active goals
+            const goals = await goalRepo.getActiveByUser(userId, 3);
 
-            // Get KES/USD rate using market-data.repo.ts method
-            const kesUsdRate = await this.marketDataRepo.getKesUsdRate();
+            // Get KES/USD rate
+            const kesUsdRate = await marketDataRepo.getKesUsdRate();
 
             const totalKes = portfolio.totalValueUsd * kesUsdRate;
             const monthlyChange = portfolio.thisMonthYield || 0;
@@ -126,47 +119,37 @@ export class DashboardController extends Controller {
                 status: goal.status
             }));
 
-            return res.json(
-                DashboardController.response(
-                    DashboardController._200,
-                    {
-                        user: {
-                            id: user.id,
-                            firstName: user.firstName || 'there',
-                            hasCompletedOnboarding: user.hasCompletedOnboarding,
-                            totalPoints: user.totalPoints,
-                            level: user.level
-                        },
-                        portfolio: {
-                            totalValueUsd: portfolio.totalValueUsd,
-                            totalValueKes: totalKes,
-                            monthlyChange: monthlyChange,
-                            monthlyChangePercent: monthlyChangePercent,
-                            monthlyTrend: monthlyChangePercent > 0 ? 'up' : monthlyChangePercent < 0 ? 'down' : 'stable'
-                        },
-                        assets: assets,
-                        totalMonthlyEarnings: assets.reduce((sum, a) => sum + (a.monthlyEarnings || 0), 0),
-                        goals: formattedGoals,
-                        quickActions: {
-                            canAddMoney: true,
-                            canWithdraw: portfolio.totalValueUsd >= 10,
-                            canRebalance: this.needsRebalance(portfolio, user),
-                            canLearn: true
-                        },
-                        kesUsdRate: kesUsdRate
-                    }
-                )
-            );
+            const dashboardData = {
+                user: {
+                    id: user.id,
+                    firstName: user.firstName || 'there',
+                    hasCompletedOnboarding: user.hasCompletedOnboarding,
+                    totalPoints: user.totalPoints,
+                    level: user.level
+                },
+                portfolio: {
+                    totalValueUsd: portfolio.totalValueUsd,
+                    totalValueKes: totalKes,
+                    monthlyChange: monthlyChange,
+                    monthlyChangePercent: monthlyChangePercent,
+                    monthlyTrend: monthlyChangePercent > 0 ? 'up' : monthlyChangePercent < 0 ? 'down' : 'stable'
+                },
+                assets: assets,
+                totalMonthlyEarnings: assets.reduce((sum, a) => sum + (a.monthlyEarnings || 0), 0),
+                goals: formattedGoals,
+                quickActions: {
+                    canAddMoney: true,
+                    canWithdraw: portfolio.totalValueUsd >= 10,
+                    canRebalance: DashboardController.needsRebalance(portfolio, user),
+                    canLearn: true
+                },
+                kesUsdRate: kesUsdRate
+            };
 
-        } catch (error: any) {
-            console.error('Get dashboard error:', error);
-            return res.json(
-                DashboardController.response(
-                    DashboardController._500,
-                    null,
-                    DashboardController.ex(error)
-                )
-            );
+            return res.send(super.response(super._200, dashboardData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -174,59 +157,53 @@ export class DashboardController extends Controller {
      * Get portfolio summary
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async getPortfolioSummary(req: Request, res: Response) {
+    public static async getPortfolioSummary(req: Request, res: Response) {
         try {
+            const portfolioRepo: PortfolioRepository = new PortfolioRepository();
+            const marketDataRepo: MarketDataRepository = new MarketDataRepository();
+            
             const userId = (req as any).userId;
 
             if (!userId) {
-                return res.json(
-                    DashboardController.response(
-                        DashboardController._401,
+                return res.send(
+                    super.response(
+                        super._401,
                         null,
                         ['Not authenticated']
                     )
                 );
             }
 
-            // Get portfolio using portfolio.repo.ts method
-            const portfolio = await this.portfolioRepo.getByUserId(userId);
+            // Get portfolio
+            const portfolio = await portfolioRepo.getByUserId(userId);
 
             if (!portfolio) {
-                return res.json(
-                    DashboardController.response(
-                        DashboardController._404,
+                return res.send(
+                    super.response(
+                        super._404,
                         null,
                         ['Portfolio not found']
                     )
                 );
             }
 
-            // Get KES/USD rate using market-data.repo.ts method
-            const kesUsdRate = await this.marketDataRepo.getKesUsdRate();
+            // Get KES/USD rate
+            const kesUsdRate = await marketDataRepo.getKesUsdRate();
 
-            return res.json(
-                DashboardController.response(
-                    DashboardController._200,
-                    {
-                        totalValueUsd: portfolio.totalValueUsd,
-                        totalValueKes: portfolio.totalValueUsd * kesUsdRate,
-                        allTimeReturnPercent: portfolio.allTimeReturnPercent,
-                        totalGainsUsd: portfolio.totalGainsUsd,
-                        monthlyEarnings: portfolio.monthlyEarningsEstimate
-                    }
-                )
-            );
+            const summaryData = {
+                totalValueUsd: portfolio.totalValueUsd,
+                totalValueKes: portfolio.totalValueUsd * kesUsdRate,
+                allTimeReturnPercent: portfolio.allTimeReturnPercent,
+                totalGainsUsd: portfolio.totalGainsUsd,
+                monthlyEarnings: portfolio.monthlyEarningsEstimate
+            };
 
-        } catch (error: any) {
-            console.error('Get portfolio summary error:', error);
-            return res.json(
-                DashboardController.response(
-                    DashboardController._500,
-                    null,
-                    DashboardController.ex(error)
-                )
-            );
+            return res.send(super.response(super._200, summaryData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -234,62 +211,56 @@ export class DashboardController extends Controller {
      * Get user statistics
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async getStats(req: Request, res: Response) {
+    public static async getStats(req: Request, res: Response) {
         try {
+            const userRepo: UserRepository = new UserRepository();
+            const portfolioRepo: PortfolioRepository = new PortfolioRepository();
+            
             const userId = (req as any).userId;
 
             if (!userId) {
-                return res.json(
-                    DashboardController.response(
-                        DashboardController._401,
+                return res.send(
+                    super.response(
+                        super._401,
                         null,
                         ['Not authenticated']
                     )
                 );
             }
 
-            // Get user using user.repo.ts method
-            const user = await this.userRepo.getById(userId);
-            // Get portfolio using portfolio.repo.ts method
-            const portfolio = await this.portfolioRepo.getByUserId(userId);
+            // Get user
+            const user = await userRepo.getById(userId);
+            // Get portfolio
+            const portfolio = await portfolioRepo.getByUserId(userId);
 
             if (!user || !portfolio) {
-                return res.json(
-                    DashboardController.response(
-                        DashboardController._404,
+                return res.send(
+                    super.response(
+                        super._404,
                         null,
                         ['User or portfolio not found']
                     )
                 );
             }
 
-            return res.json(
-                DashboardController.response(
-                    DashboardController._200,
-                    {
-                        totalPoints: user.totalPoints,
-                        level: user.level,
-                        levelTitle: user.levelTitle,
-                        currentStreak: user.currentStreak,
-                        longestStreak: user.longestStreak,
-                        totalDeposited: portfolio.totalDeposited,
-                        totalWithdrawn: portfolio.totalWithdrawn,
-                        allTimeReturn: portfolio.allTimeReturnPercent,
-                        memberSince: user.createdAt
-                    }
-                )
-            );
+            const statsData = {
+                totalPoints: user.totalPoints,
+                level: user.level,
+                levelTitle: user.levelTitle,
+                currentStreak: user.currentStreak,
+                longestStreak: user.longestStreak,
+                totalDeposited: portfolio.totalDeposited,
+                totalWithdrawn: portfolio.totalWithdrawn,
+                allTimeReturn: portfolio.allTimeReturnPercent,
+                memberSince: user.createdAt
+            };
 
-        } catch (error: any) {
-            console.error('Get stats error:', error);
-            return res.json(
-                DashboardController.response(
-                    DashboardController._500,
-                    null,
-                    DashboardController.ex(error)
-                )
-            );
+            return res.send(super.response(super._200, statsData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -299,7 +270,7 @@ export class DashboardController extends Controller {
      * @param user User entity
      * @returns boolean
      */
-    private needsRebalance(portfolio: any, user: any): boolean {
+    private static needsRebalance(portfolio: any, user: any): boolean {
         const drift = Math.abs(portfolio.stableYieldsPercent - user.targetStableYieldsPercent) +
                      Math.abs(portfolio.tokenizedStocksPercent - user.targetTokenizedStocksPercent) +
                      Math.abs(portfolio.tokenizedGoldPercent - user.targetTokenizedGoldPercent);
@@ -307,3 +278,5 @@ export class DashboardController extends Controller {
         return drift > 5;
     }
 }
+
+export default DashboardController;

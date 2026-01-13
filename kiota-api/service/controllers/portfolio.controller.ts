@@ -1,5 +1,4 @@
 import { Request, Response } from 'express';
-
 import { PortfolioRepository } from '../repositories/portfolio.repo';
 import { TransactionRepository } from '../repositories/transaction.repo';
 import { MarketDataRepository } from '../repositories/market-data.repo';
@@ -12,33 +11,26 @@ import Controller from './controller';
  * Handles portfolio detail screen for Phase 1 MVP
  * Screen: 11 (Portfolio Detail Screen)
  */
-export class PortfolioController extends Controller {
-    private portfolioRepo: PortfolioRepository;
-    private transactionRepo: TransactionRepository;
-    private marketDataRepo: MarketDataRepository;
-    private userRepo: UserRepository;
-
-    constructor() {
-        super();
-        this.portfolioRepo = new PortfolioRepository();
-        this.transactionRepo = new TransactionRepository();
-        this.marketDataRepo = new MarketDataRepository();
-        this.userRepo = new UserRepository();
-    }
-
+class PortfolioController extends Controller {
     /**
      * Get portfolio detail (Screen 11)
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async getPortfolioDetail(req: Request, res: Response) {
+    public static async getPortfolioDetail(req: Request, res: Response) {
         try {
+            const portfolioRepo: PortfolioRepository = new PortfolioRepository();
+            const transactionRepo: TransactionRepository = new TransactionRepository();
+            const marketDataRepo: MarketDataRepository = new MarketDataRepository();
+            const userRepo: UserRepository = new UserRepository();
+            
             const userId = (req as any).userId;
 
             if (!userId) {
-                return res.json(
-                    PortfolioController.response(
-                        PortfolioController._401,
+                return res.send(
+                    super.response(
+                        super._401,
                         null,
                         ['Not authenticated']
                     )
@@ -47,39 +39,39 @@ export class PortfolioController extends Controller {
 
             const period = req.query.period as string || 'ALL';
 
-            // Get portfolio using portfolio.repo.ts method
-            const portfolio = await this.portfolioRepo.getByUserId(userId);
+            // Get portfolio
+            const portfolio = await portfolioRepo.getByUserId(userId);
 
             if (!portfolio) {
-                return res.json(
-                    PortfolioController.response(
-                        PortfolioController._404,
+                return res.send(
+                    super.response(
+                        super._404,
                         null,
                         ['Portfolio not found']
                     )
                 );
             }
 
-            // Get user using user.repo.ts method
-            const user = await this.userRepo.getById(userId);
+            // Get user
+            const user = await userRepo.getById(userId);
 
             if (!user) {
-                return res.json(
-                    PortfolioController.response(
-                        PortfolioController._404,
+                return res.send(
+                    super.response(
+                        super._404,
                         null,
                         ['User not found']
                     )
                 );
             }
 
-            // Get KES/USD rate using market-data.repo.ts method
-            const kesUsdRate = await this.marketDataRepo.getKesUsdRate();
+            // Get KES/USD rate
+            const kesUsdRate = await marketDataRepo.getKesUsdRate();
 
-            // Get asset prices using market-data.repo.ts method
+            // Get asset prices
             const usdmPrice = 1.0;
-            const bcsxPrice = await this.marketDataRepo.getAssetPrice(AssetSymbol.BCSPX) || 0;
-            const paxgPrice = await this.marketDataRepo.getAssetPrice(AssetSymbol.PAXG) || 0;
+            const bcsxPrice = await marketDataRepo.getAssetPrice(AssetSymbol.BCSPX) || 0;
+            const paxgPrice = await marketDataRepo.getAssetPrice(AssetSymbol.PAXG) || 0;
 
             const assetBreakdown = [
                 {
@@ -126,8 +118,8 @@ export class PortfolioController extends Controller {
                 }
             ].filter(asset => asset.valueUsd > 0);
 
-            // Get recent transactions using transaction.repo.ts method
-            const recentTransactions = await this.transactionRepo.getRecentByUser(userId, 10);
+            // Get recent transactions
+            const recentTransactions = await transactionRepo.getRecentByUser(userId, 10);
 
             const formattedTransactions = recentTransactions.map(tx => ({
                 id: tx.id,
@@ -140,43 +132,33 @@ export class PortfolioController extends Controller {
                 txHash: tx.txHash
             }));
 
-            const history = await this.getPortfolioHistory(userId, period);
+            const history = await PortfolioController.getPortfolioHistory(userId, period, portfolioRepo);
 
-            return res.json(
-                PortfolioController.response(
-                    PortfolioController._200,
-                    {
-                        summary: {
-                            totalValueUsd: portfolio.totalValueUsd,
-                            totalValueKes: portfolio.totalValueUsd * kesUsdRate,
-                            allTimeReturn: {
-                                amountUsd: portfolio.totalGainsUsd,
-                                percentage: portfolio.allTimeReturnPercent
-                            },
-                            totalDeposited: portfolio.totalDeposited,
-                            totalWithdrawn: portfolio.totalWithdrawn,
-                            monthlyEarnings: portfolio.monthlyEarningsEstimate,
-                            kesUsdRate
-                        },
-                        assets: assetBreakdown,
-                        needsRebalance: this.checkRebalanceNeeded(portfolio, user),
-                        rebalanceThreshold: 5,
-                        transactions: formattedTransactions,
-                        history: history,
-                        period: period
-                    }
-                )
-            );
+            const portfolioData = {
+                summary: {
+                    totalValueUsd: portfolio.totalValueUsd,
+                    totalValueKes: portfolio.totalValueUsd * kesUsdRate,
+                    allTimeReturn: {
+                        amountUsd: portfolio.totalGainsUsd,
+                        percentage: portfolio.allTimeReturnPercent
+                    },
+                    totalDeposited: portfolio.totalDeposited,
+                    totalWithdrawn: portfolio.totalWithdrawn,
+                    monthlyEarnings: portfolio.monthlyEarningsEstimate,
+                    kesUsdRate
+                },
+                assets: assetBreakdown,
+                needsRebalance: PortfolioController.checkRebalanceNeeded(portfolio, user),
+                rebalanceThreshold: 5,
+                transactions: formattedTransactions,
+                history: history,
+                period: period
+            };
 
-        } catch (error: any) {
-            console.error('Get portfolio detail error:', error);
-            return res.json(
-                PortfolioController.response(
-                    PortfolioController._500,
-                    null,
-                    PortfolioController.ex(error)
-                )
-            );
+            return res.send(super.response(super._200, portfolioData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -184,16 +166,20 @@ export class PortfolioController extends Controller {
      * Get individual asset details
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async getAssetDetail(req: Request, res: Response) {
+    public static async getAssetDetail(req: Request, res: Response) {
         try {
+            const portfolioRepo: PortfolioRepository = new PortfolioRepository();
+            const transactionRepo: TransactionRepository = new TransactionRepository();
+            
             const userId = (req as any).userId;
             const { symbol } = req.params;
 
             if (!userId) {
-                return res.json(
-                    PortfolioController.response(
-                        PortfolioController._401,
+                return res.send(
+                    super.response(
+                        super._401,
                         null,
                         ['Not authenticated']
                     )
@@ -202,22 +188,22 @@ export class PortfolioController extends Controller {
 
             const validSymbols = ['USDM', 'bCSPX', 'PAXG'];
             if (!validSymbols.includes(symbol)) {
-                return res.json(
-                    PortfolioController.response(
-                        PortfolioController._400,
+                return res.send(
+                    super.response(
+                        super._400,
                         null,
                         ['Invalid asset symbol']
                     )
                 );
             }
 
-            // Get portfolio using portfolio.repo.ts method
-            const portfolio = await this.portfolioRepo.getByUserId(userId);
+            // Get portfolio
+            const portfolio = await portfolioRepo.getByUserId(userId);
 
             if (!portfolio) {
-                return res.json(
-                    PortfolioController.response(
-                        PortfolioController._404,
+                return res.send(
+                    super.response(
+                        super._404,
                         null,
                         ['Portfolio not found']
                     )
@@ -235,9 +221,8 @@ export class PortfolioController extends Controller {
                     percentage: portfolio.stableYieldsPercent,
                     apy: 5.0,
                     riskLevel: 'Very Low',
-                    description: 'USDM is a yield-bearing stablecoin backed by US Treasury Bills.',
+                    description: 'USDM is a yield-bearing stablecoin backed by US Treasuries.',
                     features: [
-                        'Dollar-backed (1:1 with USD)',
                         '5.0% APY (auto-compounding)',
                         'Backed by US Treasuries',
                         'No lock-up period',
@@ -284,38 +269,28 @@ export class PortfolioController extends Controller {
                 };
             }
 
-            // Get asset transactions using transaction.repo.ts method
-            const assetTransactions = await this.transactionRepo.getByUserAndAsset(
+            // Get asset transactions
+            const assetTransactions = await transactionRepo.getByUserAndAsset(
                 userId,
-                this.symbolToAssetType(symbol),
+                PortfolioController.symbolToAssetType(symbol),
                 20
             );
 
-            return res.json(
-                PortfolioController.response(
-                    PortfolioController._200,
-                    {
-                        asset: assetData,
-                        transactions: assetTransactions.map(tx => ({
-                            id: tx.id,
-                            type: tx.type,
-                            amountUsd: tx.valueUsd,
-                            date: tx.createdAt,
-                            status: tx.status
-                        }))
-                    }
-                )
-            );
+            const assetDetailData = {
+                asset: assetData,
+                transactions: assetTransactions.map(tx => ({
+                    id: tx.id,
+                    type: tx.type,
+                    amountUsd: tx.valueUsd,
+                    date: tx.createdAt,
+                    status: tx.status
+                }))
+            };
 
-        } catch (error: any) {
-            console.error('Get asset detail error:', error);
-            return res.json(
-                PortfolioController.response(
-                    PortfolioController._500,
-                    null,
-                    PortfolioController.ex(error)
-                )
-            );
+            return res.send(super.response(super._200, assetDetailData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -323,74 +298,68 @@ export class PortfolioController extends Controller {
      * Trigger portfolio rebalancing
      * @param req Express Request
      * @param res Express Response
+     * @returns Json Object
      */
-    async rebalancePortfolio(req: Request, res: Response) {
+    public static async rebalancePortfolio(req: Request, res: Response) {
         try {
+            const portfolioRepo: PortfolioRepository = new PortfolioRepository();
+            const userRepo: UserRepository = new UserRepository();
+            
             const userId = (req as any).userId;
 
             if (!userId) {
-                return res.json(
-                    PortfolioController.response(
-                        PortfolioController._401,
+                return res.send(
+                    super.response(
+                        super._401,
                         null,
                         ['Not authenticated']
                     )
                 );
             }
 
-            // Get portfolio using portfolio.repo.ts method
-            const portfolio = await this.portfolioRepo.getByUserId(userId);
-            // Get user using user.repo.ts method
-            const user = await this.userRepo.getById(userId);
+            // Get portfolio
+            const portfolio = await portfolioRepo.getByUserId(userId);
+            // Get user
+            const user = await userRepo.getById(userId);
 
             if (!portfolio || !user) {
-                return res.json(
-                    PortfolioController.response(
-                        PortfolioController._404,
+                return res.send(
+                    super.response(
+                        super._404,
                         null,
                         ['Portfolio or user not found']
                     )
                 );
             }
 
-            if (!this.checkRebalanceNeeded(portfolio, user)) {
-                return res.json(
-                    PortfolioController.response(
-                        PortfolioController._400,
+            if (!PortfolioController.checkRebalanceNeeded(portfolio, user)) {
+                return res.send(
+                    super.response(
+                        super._400,
                         null,
                         ['Portfolio does not need rebalancing (drift < 5%)']
                     )
                 );
             }
 
-            return res.json(
-                PortfolioController.response(
-                    PortfolioController._200,
-                    {
-                        estimatedCompletionTime: '2-5 minutes',
-                        currentAllocation: {
-                            stableYields: portfolio.stableYieldsPercent,
-                            tokenizedStocks: portfolio.tokenizedStocksPercent,
-                            tokenizedGold: portfolio.tokenizedGoldPercent
-                        },
-                        targetAllocation: {
-                            stableYields: user.targetStableYieldsPercent,
-                            tokenizedStocks: user.targetTokenizedStocksPercent,
-                            tokenizedGold: user.targetTokenizedGoldPercent
-                        }
-                    }
-                )
-            );
+            const rebalanceData = {
+                estimatedCompletionTime: '2-5 minutes',
+                currentAllocation: {
+                    stableYields: portfolio.stableYieldsPercent,
+                    tokenizedStocks: portfolio.tokenizedStocksPercent,
+                    tokenizedGold: portfolio.tokenizedGoldPercent
+                },
+                targetAllocation: {
+                    stableYields: user.targetStableYieldsPercent,
+                    tokenizedStocks: user.targetTokenizedStocksPercent,
+                    tokenizedGold: user.targetTokenizedGoldPercent
+                }
+            };
 
-        } catch (error: any) {
-            console.error('Rebalance portfolio error:', error);
-            return res.json(
-                PortfolioController.response(
-                    PortfolioController._500,
-                    null,
-                    PortfolioController.ex(error)
-                )
-            );
+            return res.send(super.response(super._200, rebalanceData));
+
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
 
@@ -398,9 +367,14 @@ export class PortfolioController extends Controller {
      * Get portfolio value history
      * @param userId User ID
      * @param period Time period
+     * @param portfolioRepo Portfolio repository instance
      * @returns History data array
      */
-    private async getPortfolioHistory(userId: string, period: string): Promise<any[]> {
+    private static async getPortfolioHistory(
+        userId: string, 
+        period: string,
+        portfolioRepo: PortfolioRepository
+    ): Promise<any[]> {
         const now = new Date();
         const data = [];
 
@@ -411,7 +385,7 @@ export class PortfolioController extends Controller {
         else if (period === '3M') days = 90;
         else if (period === '1Y') days = 365;
 
-        const portfolio = await this.portfolioRepo.getByUserId(userId);
+        const portfolio = await portfolioRepo.getByUserId(userId);
         const baseValue = portfolio?.totalValueUsd || 0;
 
         for (let i = days; i >= 0; i--) {
@@ -436,7 +410,7 @@ export class PortfolioController extends Controller {
      * @param user User entity
      * @returns boolean
      */
-    private checkRebalanceNeeded(portfolio: any, user: any): boolean {
+    private static checkRebalanceNeeded(portfolio: any, user: any): boolean {
         const stableYieldDrift = Math.abs(portfolio.stableYieldsPercent - user.targetStableYieldsPercent);
         const stocksDrift = Math.abs(portfolio.tokenizedStocksPercent - user.targetTokenizedStocksPercent);
         const goldDrift = Math.abs(portfolio.tokenizedGoldPercent - user.targetTokenizedGoldPercent);
@@ -451,7 +425,9 @@ export class PortfolioController extends Controller {
      * @param symbol Asset symbol
      * @returns AssetType
      */
-    private symbolToAssetType(symbol: string): any {
+    private static symbolToAssetType(symbol: string): any {
         return symbol;
     }
 }
+
+export default PortfolioController;

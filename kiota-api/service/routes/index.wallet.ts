@@ -1,21 +1,21 @@
 import express from "express";
-import { WalletController } from "../controllers/wallet.controller";
+import WalletController from "../controllers/wallet.controller";
 
 const router = express.Router();
-const walletController = new WalletController();
 
 // Wallet management
-router.post('/create', (req, res) => walletController.createWallet(req, res));
-router.get('/info', (req, res) => walletController.getWallet(req, res));
-router.get('/exists', (req, res) => walletController.walletExists(req, res));
+router.post('/create', WalletController.createWallet);
+router.get('/info', WalletController.getWallet);
+router.get('/exists', WalletController.walletExists);
 
 // Wallet balances
-router.put('/balances', (req, res) => walletController.updateBalances(req, res));
+router.put('/balances', WalletController.updateBalances);
 
-router.get("*", function (req, res) {
+// Catch-all route - must be last
+router.use((req, res) => {
     res.setHeader("Content-Type", "application/json");
     res.status(200);
-    return res.json({ service: process.env.SERVICE_NAME, module: "wallet" });
+    return res.json({ service: process.env.SERVICE_NAME });
 });
 
 export default router;
