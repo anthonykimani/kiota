@@ -19,12 +19,12 @@ export class PortfolioRepository {
                 userId,
                 totalValueUsd: 0,
                 totalValueKes: 0,
-                usdmValueUsd: 0,
-                bcspxValueUsd: 0,
-                paxgValueUsd: 0,
-                usdmPercent: 0,
-                bcspxPercent: 0,
-                paxgPercent: 0,
+                stableYieldsValueUsd: 0,
+                tokenizedStocksValueUsd: 0,
+                tokenizedGoldValueUsd: 0,
+                stableYieldsPercent: 0,
+                tokenizedStocksPercent: 0,
+                tokenizedGoldPercent: 0,
                 totalDeposited: 0,
                 totalWithdrawn: 0,
                 totalGainsUsd: 0,
@@ -50,28 +50,28 @@ export class PortfolioRepository {
 
     // Screen 10e & 11: Update portfolio values after deposit
     async updateValues(userId: string, values: {
-        usdmValueUsd: number;
-        bcspxValueUsd: number;
-        paxgValueUsd: number;
+        stableYieldsValueUsd: number;
+        tokenizedStocksValueUsd: number;
+        tokenizedGoldValueUsd: number;
         kesUsdRate: number;
     }): Promise<Portfolio | null> {
         try {
             const portfolio = await this.getByUserId(userId);
             if (!portfolio) return null;
 
-            const totalUsd = values.usdmValueUsd + values.bcspxValueUsd + values.paxgValueUsd;
+            const totalUsd = values.stableYieldsValueUsd + values.tokenizedStocksValueUsd + values.tokenizedGoldValueUsd;
 
-            portfolio.usdmValueUsd = values.usdmValueUsd;
-            portfolio.bcspxValueUsd = values.bcspxValueUsd;
-            portfolio.paxgValueUsd = values.paxgValueUsd;
+            portfolio.stableYieldsValueUsd = values.stableYieldsValueUsd;
+            portfolio.tokenizedStocksValueUsd = values.tokenizedStocksValueUsd;
+            portfolio.tokenizedGoldValueUsd = values.tokenizedGoldValueUsd;
             portfolio.totalValueUsd = totalUsd;
             portfolio.totalValueKes = totalUsd * values.kesUsdRate;
 
             // Calculate percentages
             if (totalUsd > 0) {
-                portfolio.usdmPercent = (values.usdmValueUsd / totalUsd) * 100;
-                portfolio.bcspxPercent = (values.bcspxValueUsd / totalUsd) * 100;
-                portfolio.paxgPercent = (values.paxgValueUsd / totalUsd) * 100;
+                portfolio.stableYieldsPercent = (values.stableYieldsValueUsd / totalUsd) * 100;
+                portfolio.tokenizedStocksPercent = (values.tokenizedStocksValueUsd / totalUsd) * 100;
+                portfolio.tokenizedGoldPercent = (values.tokenizedGoldValueUsd / totalUsd) * 100;
             }
 
             return await this.repo.save(portfolio);

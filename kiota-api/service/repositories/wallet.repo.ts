@@ -1,7 +1,8 @@
 import { Repository } from "typeorm";
 import dotenv from "dotenv";
-import { Wallet, WalletChain, WalletProvider } from "../models/wallet.entity";
+import { Wallet } from "../models/wallet.entity";
 import AppDataSource from "../configs/ormconfig";
+import { WalletChain, WalletProvider } from "../enums/Wallet";
 
 export class WalletRepository {
     private repo: Repository<Wallet>;
@@ -26,10 +27,10 @@ export class WalletRepository {
                 privyUserId: data.privyUserId,
                 isActive: true,
                 usdcBalance: 0,
-                usdmBalance: 0,
-                bcspxBalance: 0,
-                paxgBalance: 0,
-                ethBalance: 0
+                stableYieldBalance: 0,
+                tokenizedStocksBalance: 0,
+                tokenizedGoldBalance: 0,
+                gasBalance: 0
             });
 
             return await this.repo.save(wallet);
@@ -63,20 +64,20 @@ export class WalletRepository {
     // Screen 10e: Update balances after deposit
     async updateBalances(userId: string, balances: {
         usdcBalance?: number;
-        usdmBalance?: number;
-        bcspxBalance?: number;
-        paxgBalance?: number;
-        ethBalance?: number;
+        stableYieldBalance?: number;
+        tokenizedStocksBalance?: number;
+        tokenizedGoldBalance?: number;
+        gasBalance?: number;
     }): Promise<Wallet | null> {
         try {
             const wallet = await this.getByUserId(userId);
             if (!wallet) return null;
 
             if (balances.usdcBalance !== undefined) wallet.usdcBalance = balances.usdcBalance;
-            if (balances.usdmBalance !== undefined) wallet.usdmBalance = balances.usdmBalance;
-            if (balances.bcspxBalance !== undefined) wallet.bcspxBalance = balances.bcspxBalance;
-            if (balances.paxgBalance !== undefined) wallet.paxgBalance = balances.paxgBalance;
-            if (balances.ethBalance !== undefined) wallet.ethBalance = balances.ethBalance;
+            if (balances.stableYieldBalance !== undefined) wallet.stableYieldBalance = balances.stableYieldBalance;
+            if (balances.tokenizedStocksBalance !== undefined) wallet.tokenizedStocksBalance = balances.tokenizedStocksBalance;
+            if (balances.tokenizedGoldBalance !== undefined) wallet.tokenizedGoldBalance = balances.tokenizedGoldBalance;
+            if (balances.gasBalance !== undefined) wallet.gasBalance = balances.gasBalance;
             wallet.balancesLastUpdated = new Date();
 
             return await this.repo.save(wallet);

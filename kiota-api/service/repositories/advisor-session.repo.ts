@@ -32,9 +32,9 @@ export class AIAdvisorSessionRepository {
     // Screen 6: Save AI strategy response
     async saveStrategyResponse(sessionId: string, response: {
         allocation: {
-            usdm: number;
-            bcspx: number;
-            paxg: number;
+            stableYields: number;
+            tokenizedStocks: number;
+            tokenizedGold: number;
         };
         strategyName: string;
         rationale: string;

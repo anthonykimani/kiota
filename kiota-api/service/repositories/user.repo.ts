@@ -85,18 +85,18 @@ export class UserRepository {
 
     // Screen 6 & 7: Save AI strategy recommendation
     async saveStrategy(userId: string, strategy: {
-        targetUSDMPercent: number;
-        targetBCSPXPercent: number;
-        targetPAXGPercent: number;
+        targetStableYieldsPercent: number;
+        targetTokenizedStocksPercent: number;
+        targetTokenizedGoldPercent: number;
         strategyName: string;
     }): Promise<User | null> {
         try {
             const user = await this.repo.findOne({ where: { id: userId } });
             if (!user) return null;
 
-            user.targetUSDMPercent = strategy.targetUSDMPercent;
-            user.targetBCSPXPercent = strategy.targetBCSPXPercent;
-            user.targetPAXGPercent = strategy.targetPAXGPercent;
+            user.targetStableYieldsPercent = strategy.targetStableYieldsPercent;
+            user.targetTokenizedStocksPercent = strategy.targetTokenizedStocksPercent;
+            user.targetTokenizedGoldPercent = strategy.targetTokenizedGoldPercent;
             user.strategyName = strategy.strategyName;
 
             return await this.repo.save(user);

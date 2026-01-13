@@ -21,9 +21,9 @@ export class TransactionRepository {
         exchangeRate: number;
         mpesaPhoneNumber: string;
         allocation: {
-            usdm: number;
-            bcspx: number;
-            paxg: number;
+            stableYields: number;
+            tokenizedStocks: number;
+            tokenizedGold: number;
         };
         feeKes?: number;
         feeUsd?: number;
