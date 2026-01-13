@@ -129,10 +129,10 @@ export class Transaction {
   // Asset allocation (for deposits)
   @Column({ type: 'jsonb', nullable: true })
   allocation: {
-    usdm?: number;
-    bcspx?: number;
-    paxg?: number;
-    btc?: number;
+    stableYields?: number;
+    tokenizedStocks?: number;
+    tokenizedGold?: number;
+    blueChipCrypto?: number;
   };
 
   // Timing

@@ -40,10 +40,10 @@ export class AIAdvisorSession {
   @Column({ type: 'jsonb', nullable: true })
   aiResponse: {
     allocation?: {
-      usdm: number;
-      bcspx: number;
-      paxg: number;
-      btc?: number;
+      stableYields: number;
+      tokenizedStocks: number;
+      tokenizedGold: number;
+      blueChipCrypto?: number;
     };
     projections?: Record<string, any>;
     rationale?: string;

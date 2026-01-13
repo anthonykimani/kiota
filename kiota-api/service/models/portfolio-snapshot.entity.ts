@@ -37,16 +37,16 @@ export class PortfolioSnapshot {
   totalValueKes: number;
 
   @Column({ type: 'decimal', precision: 18, scale: 2 })
-  usdmValueUsd: number;
+  stableYieldsValueUsd: number;
 
   @Column({ type: 'decimal', precision: 18, scale: 2 })
-  bcspxValueUsd: number;
+  tokenizedStocksValueUsd: number;
 
   @Column({ type: 'decimal', precision: 18, scale: 2 })
-  paxgValueUsd: number;
+  tokenizedGoldValueUsd: number;
 
   @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
-  btcValueUsd: number;
+  blueChipCryptoValueUsd: number;
 
   // Market prices at snapshot
   @Column({ type: 'decimal', precision: 10, scale: 2 })
