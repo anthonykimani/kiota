@@ -12,6 +12,7 @@ import walletRoutes from "./routes/index.wallet";
 import dashboardRoutes from "./routes/index.dashboard";
 import depositRoutes from "./routes/index.deposit";
 import portfolioRoutes from "./routes/index.portfolio";
+import privyRoutes from "./routes/index.privy";
 
 // Load environment variables
 dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
@@ -35,6 +36,7 @@ app.use("/api/v1/wallet", walletRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
 app.use("/api/v1/deposit", depositRoutes);
 app.use("/api/v1/portfolio", portfolioRoutes);
+app.use("/api/v1/privyAuth/privy", privyRoutes)
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -56,7 +58,8 @@ app.get("/", (req, res) => {
             wallet: "/api/v1/wallet",
             dashboard: "/api/v1/dashboard",
             deposit: "/api/v1/deposit",
-            portfolio: "/api/v1/portfolio"
+            portfolio: "/api/v1/portfolio",
+            privyAuth: "/api/v1/auth/privy"
         }
     });
 });
