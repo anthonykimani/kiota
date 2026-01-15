@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import PrivyAuthController from '../controllers/privy-auth.controller';
+import { requireInternalAuth } from '../middleware/auth';
 
 const router: Router = Router();
 
@@ -35,7 +36,7 @@ router.post('/server-create', PrivyAuthController.createServerUser);
  * 
  * Note: Add auth middleware here when you create it
  */
-router.get('/me', PrivyAuthController.getCurrentUser);
+router.get('/me', requireInternalAuth, PrivyAuthController.getCurrentUser);
 
 /**
  * POST /auth/privy/refresh
@@ -45,7 +46,7 @@ router.get('/me', PrivyAuthController.getCurrentUser);
  * 
  * Note: Add auth middleware here when you create it
  */
-router.post('/refresh', PrivyAuthController.refreshFromPrivy);
+router.post('/refresh', requireInternalAuth, PrivyAuthController.refreshFromPrivy);
 
 /**
  * Catch-all route
