@@ -1,4 +1,5 @@
 import { PrivyClient } from '@privy-io/node';
+import { AuthMethod } from '../../enums/AuthMethod';
 
 export class PrivyService {
     private client: PrivyClient;
@@ -123,14 +124,14 @@ export class PrivyService {
         }
     }
 
-    extractPrimaryAuth(privyUser: any): { method: string; phoneNumber?: string; email?: string; } {
+    extractPrimaryAuth(privyUser: any): { method: AuthMethod; phoneNumber?: string; email?: string; } {
         const phoneAccount = privyUser.linked_accounts.find((acc: any) => acc.type === 'phone');
-        if (phoneAccount) return { method: 'phone', phoneNumber: phoneAccount.number };
+        if (phoneAccount) return { method: AuthMethod.PHONE, phoneNumber: phoneAccount.number };
 
         const emailAccount = privyUser.linked_accounts.find((acc: any) => acc.type === 'email');
-        if (emailAccount) return { method: 'email', email: emailAccount.address };
+        if (emailAccount) return { method: AuthMethod.EMAIL, email: emailAccount.address };
 
-        return { method: 'wallet' };
+        return { method: AuthMethod.WALLET };
     }
 
     extractWallet(privyUser: any): { id: string; address: string; chainType: string; } | null {

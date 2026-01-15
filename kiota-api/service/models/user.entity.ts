@@ -20,13 +20,14 @@ import { Transaction } from './transaction.entity';
 import { Notification } from './notification.entity';
 import { ChamaMembership } from './chama-membership.entity';
 import { InvestmentExperience, KYCStatus, MembershipTier, RiskTolerance } from '../enums/User';
+import { AuthMethod } from '../enums/AuthMethod';
 
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 20, unique: true })
+  @Column({ type: 'varchar', length: 20, unique: true, nullable: true })
   @Index()
   phoneNumber: string;
 
@@ -159,8 +160,8 @@ export class User {
   @Column({ type: 'varchar', length: 255, nullable: true })
   privyUserId: string;
 
-  @Column({ type: 'varchar', length: 50, nullable: true })
-  primaryAuthMethod: string; // 'phone', 'email', 'google', 'wallet'
+  @Column({ type: 'enum', enum: AuthMethod, nullable: true })
+  primaryAuthMethod: AuthMethod; // 'phone', 'email', 'google', 'wallet'
 
   @CreateDateColumn()
   createdAt: Date;

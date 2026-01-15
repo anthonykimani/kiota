@@ -4,6 +4,7 @@ import { WalletRepository } from '../repositories/wallet.repo';
 import { PortfolioRepository } from '../repositories/portfolio.repo';
 import Controller from './controller';
 import { privyService } from '../utils/provider/privy';
+import { AuthMethod } from '../enums/AuthMethod';
 
 /**
  * Privy Auth Controller
@@ -284,7 +285,7 @@ class PrivyAuthController extends Controller {
                 privyUserId: privyResult.user!.id,
                 phoneNumber: phoneNumber,
                 email: email,
-                primaryAuthMethod: phoneNumber ? 'phone' : 'email'
+                primaryAuthMethod: phoneNumber ? AuthMethod.PHONE : AuthMethod.EMAIL
             });
 
             // Create wallet record

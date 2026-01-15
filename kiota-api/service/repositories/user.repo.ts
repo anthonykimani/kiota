@@ -2,6 +2,7 @@ import { Repository } from "typeorm";
 import dotenv from "dotenv";
 import AppDataSource from "../configs/ormconfig";
 import { User } from "../models/user.entity";
+import { AuthMethod } from "../enums/AuthMethod";
 
 
 export class UserRepository {
@@ -161,7 +162,7 @@ export class UserRepository {
         privyUserId: string;
         phoneNumber?: string;
         email?: string;
-        primaryAuthMethod: string;
+        primaryAuthMethod: AuthMethod;
     }): Promise<User> {
         const user = this.repo.create({
             privyUserId: data.privyUserId,

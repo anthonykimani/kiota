@@ -1,6 +1,32 @@
 import dotenv from "dotenv";
 import { join } from "path";
 import { DataSource } from "typeorm";
+import { User } from "../models/user.entity";
+import { Wallet } from "../models/wallet.entity";
+import { Transaction } from "../models/transaction.entity";
+import { Quiz } from "../models/quiz.entity";
+import { Portfolio } from "../models/portfolio.entity";
+import { PortfolioSnapshot } from "../models/portfolio-snapshot.entity";
+import { PortfolioHolding } from "../models/portfolio-holding.entity";
+import { Lesson } from "../models/lesson.entity";
+import { LessonProgress } from "../models/lesson-progress.entity";
+import { LearningModule } from "../models/learning-module.entity";
+import { LearningTrack } from "../models/learningTrack.entity";
+import { Goal } from "../models/goal.entity";
+import { GoalContribution } from "../models/goal-contribution.entity";
+import { GoalMilestone } from "../models/goal-milestone.entity";
+import { AIAdvisorSession } from "../models/ai-advisor-session.entity";
+import { AutoSaveExecution } from "../models/autosave-execution.entity";
+import { AutoSaveRule } from "../models/autosave-rule.entity";
+import { Badge } from "../models/badge.entity";
+import { Chama } from "../models/chama.entity";
+import { ChamaMembership } from "../models/chama-membership.entity";
+import { MarketData } from "../models/market-data.entity";
+import { Notification } from "../models/notification.entity";
+import { RoundupTracker } from "../models/roundup-tracker.entity";
+import { SavingsCommitment } from "../models/savings-commitment.entity";
+import { UserBadge } from "../models/user-badge.entity";
+import { ChamaActivity } from "../models/chama-activity";
 
 dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
 
@@ -27,7 +53,32 @@ const AppDataSource = new DataSource({
         //cert: "",
     } : config.ssl,
     entities: [
-
+        AIAdvisorSession,
+        AutoSaveExecution,
+        AutoSaveRule,
+        Badge,
+        Chama,
+        ChamaActivity,
+        ChamaMembership,
+        Goal,
+        GoalContribution,
+        GoalMilestone,
+        Lesson,
+        LessonProgress,
+        LearningModule,
+        LearningTrack,
+        MarketData,
+        Notification,
+        Portfolio,
+        PortfolioSnapshot,
+        PortfolioHolding,
+        Quiz,
+        RoundupTracker,
+        SavingsCommitment,
+        Transaction,
+        User,
+        UserBadge,
+        Wallet,
     ],
     synchronize: true,
     dropSchema: false,
