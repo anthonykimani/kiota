@@ -21,7 +21,7 @@ import { AutoSaveRule } from "../models/autosave-rule.entity";
 import { Badge } from "../models/badge.entity";
 import { Chama } from "../models/chama.entity";
 import { ChamaMembership } from "../models/chama-membership.entity";
-import { MarketData } from "../models/market-data.entity";
+import { ExchangeRate, MarketData } from "../models/market-data.entity";
 import { Notification } from "../models/notification.entity";
 import { RoundupTracker } from "../models/roundup-tracker.entity";
 import { SavingsCommitment } from "../models/savings-commitment.entity";
@@ -68,6 +68,7 @@ const AppDataSource = new DataSource({
         LearningModule,
         LearningTrack,
         MarketData,
+        ExchangeRate,
         Notification,
         Portfolio,
         PortfolioSnapshot,

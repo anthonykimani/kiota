@@ -29,6 +29,7 @@
     "luxon": "^3.7.2",
     "mocha": "^11.7.5",
     "mustache": "^4.2.0",
+    "openai": "^6.16.0",
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
     "ts-node": "^10.9.2",
