@@ -8,6 +8,7 @@ import {
 } from '../configs/queue.config';
 import { processDepositCompletion } from './processors/deposit-completion.processor';
 import { processOnchainDepositConfirmation } from './processors/onchain-deposit-confirmation.processor';
+import { monitoringService } from '../services/monitoring.service';
 
 // Load environment variables
 dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
@@ -81,33 +82,47 @@ async function startWorker() {
     // Step 4: Set up event listeners for monitoring
     console.log('\n👂 Setting up event listeners...');
 
+    // Initialize monitoring for queues
+    monitoringService.initQueue('deposit-completion');
+    monitoringService.initQueue('onchain-deposit-confirmation');
+
     // Deposit completion queue events
     DEPOSIT_COMPLETION_QUEUE.on('completed', (job, result) => {
-      console.log(`✅ Job ${job.id} completed successfully`);
+      console.log(`✅ [deposit-completion] Job ${job.id} completed successfully`);
+      monitoringService.recordSuccess('deposit-completion', job.id.toString());
     });
 
     DEPOSIT_COMPLETION_QUEUE.on('failed', (job, err) => {
-      console.error(`❌ Job ${job?.id} failed:`, err.message);
+      console.error(`❌ [deposit-completion] Job ${job?.id} failed:`, err.message);
+      if (job) {
+        monitoringService.recordFailure('deposit-completion', job.id.toString(), err);
+      }
     });
 
     DEPOSIT_COMPLETION_QUEUE.on('stalled', (job) => {
-      console.warn(`⚠️  Job ${job.id} stalled (worker crashed?)`);
+      console.warn(`⚠️  [deposit-completion] Job ${job.id} stalled (worker crashed?)`);
+      monitoringService.recordStalled('deposit-completion', job.id.toString());
     });
 
     // Onchain confirmation queue events
     ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE.on('completed', (job, result) => {
-      console.log(`✅ Job ${job.id} completed successfully`);
+      console.log(`✅ [onchain-deposit-confirmation] Job ${job.id} completed successfully`);
+      monitoringService.recordSuccess('onchain-deposit-confirmation', job.id.toString());
     });
 
     ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE.on('failed', (job, err) => {
-      console.error(`❌ Job ${job?.id} failed:`, err.message);
+      console.error(`❌ [onchain-deposit-confirmation] Job ${job?.id} failed:`, err.message);
+      if (job) {
+        monitoringService.recordFailure('onchain-deposit-confirmation', job.id.toString(), err);
+      }
     });
 
     ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE.on('stalled', (job) => {
-      console.warn(`⚠️  Job ${job.id} stalled (worker crashed?)`);
+      console.warn(`⚠️  [onchain-deposit-confirmation] Job ${job.id} stalled (worker crashed?)`);
+      monitoringService.recordStalled('onchain-deposit-confirmation', job.id.toString());
     });
 
-    console.log('✅ Event listeners registered');
+    console.log('✅ Event listeners registered with monitoring');
 
     // Step 5: Worker is ready!
     console.log('\n' + '═'.repeat(50));
