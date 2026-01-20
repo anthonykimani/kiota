@@ -27,6 +27,8 @@ import { RoundupTracker } from "../models/roundup-tracker.entity";
 import { SavingsCommitment } from "../models/savings-commitment.entity";
 import { UserBadge } from "../models/user-badge.entity";
 import { ChamaActivity } from "../models/chama-activity";
+import { DepositSession } from "../models/deposit-session.entity";
+import { OnchainProcessedEvent } from "../models/onchain-processed-event.entity";
 
 dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
 
@@ -60,6 +62,7 @@ const AppDataSource = new DataSource({
         Chama,
         ChamaActivity,
         ChamaMembership,
+        DepositSession,
         Goal,
         GoalContribution,
         GoalMilestone,
@@ -70,6 +73,7 @@ const AppDataSource = new DataSource({
         MarketData,
         ExchangeRate,
         Notification,
+        OnchainProcessedEvent,
         Portfolio,
         PortfolioSnapshot,
         PortfolioHolding,

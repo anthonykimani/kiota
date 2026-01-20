@@ -2,7 +2,25 @@ import { Request, Response } from 'express';
 import { WalletRepository } from '../repositories/wallet.repo';
 import { PortfolioRepository } from '../repositories/portfolio.repo';
 import { UserRepository } from '../repositories/user.repo';
+import { TransactionRepository } from '../repositories/transaction.repo';
 import Controller from './controller';
+import { createPublicClient, formatUnits, http } from 'viem';
+import { baseSepolia } from "viem/chains";
+
+// ---- MVP Config (Base + USDC only) ----
+const BASE_RPC_URL = process.env.BASE_RPC_URL || '';
+const BASE_USDC_ADDRESS = process.env.BASE_USDC_ADDRESS || '';
+
+const ERC20_ABI = [
+    'function balanceOf(address owner) view returns (uint256)'
+];
+
+// Viem public client
+const baseClient = createPublicClient({
+    chain: baseSepolia,
+    transport: http(BASE_RPC_URL),
+});
+
 
 /**
  * Wallet Controller
@@ -19,6 +37,7 @@ class WalletController extends Controller {
     public static async getWallet(req: Request, res: Response) {
         try {
             const walletRepo: WalletRepository = new WalletRepository();
+            const txRepo: TransactionRepository = new TransactionRepository();
             const userId = (req as any).userId;
 
             if (!userId) {
@@ -44,6 +63,39 @@ class WalletController extends Controller {
                 );
             }
 
+            // --- Option A: show Unallocated USDC ---
+            // Onchain truth: USDC balanceOf(userWallet)
+            // Kiota allocation: sum of CONFIRMED USDC deposits credited to portfolio
+            // Unallocated = onchain - allocated (>= 0)
+            let usdcOnchain = null as null | string;
+            let usdcAllocated = null as null | string;
+            let usdcUnallocated = null as null | string;
+
+            if (BASE_RPC_URL && BASE_USDC_ADDRESS && wallet.address) {
+                try {
+                    const raw = await baseClient.readContract({
+                        address: BASE_USDC_ADDRESS as `0x${string}`,
+                        abi: ERC20_ABI,
+                        functionName: "balanceOf",
+                        args: [wallet.address as `0x${string}`],
+                    });
+
+                    const onchainNum = Number(formatUnits(raw as bigint, 6));
+
+                    // NOTE: Implement txRepo.getAllocatedUsdcUsd(userId) in your TransactionRepository.
+                    // It should return the net allocated USDC (confirmed deposits - confirmed withdrawals) as a number.
+                    const allocatedNum = Number(await txRepo.getAllocatedUsdcUsd(userId));
+
+                    const unallocatedNum = Math.max(onchainNum - allocatedNum, 0);
+
+                    usdcOnchain = onchainNum.toFixed(6);
+                    usdcAllocated = allocatedNum.toFixed(6);
+                    usdcUnallocated = unallocatedNum.toFixed(6);
+                } catch (e) {
+                    // If RPC is down, still return DB wallet info.
+                }
+            }
+
             const walletData = {
                 wallet: {
                     id: wallet.id,
@@ -51,7 +103,12 @@ class WalletController extends Controller {
                     provider: wallet.provider,
                     primaryChain: wallet.primaryChain,
                     balances: {
+                        // Backward compatible field (DB)
                         usdc: wallet.usdcBalance,
+                        // New fields (onchain + accounting)
+                        usdcOnchain,
+                        usdcAllocated,
+                        usdcUnallocated,
                         stableYield: wallet.stableYieldBalance,
                         tokenizedStocks: wallet.tokenizedStocksBalance,
                         tokenizedGold: wallet.tokenizedGoldBalance,
