@@ -2,7 +2,27 @@ import { Request, Response } from 'express';
 import { UserRepository } from '../repositories/user.repo';
 import { AIAdvisorSessionRepository } from '../repositories/advisor-session.repo';
 import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from "openai";
+import z from "zod";
 import Controller from './controller';
+
+const StrategySchema = z.object({
+    allocation: z.object({
+        stableYields: z.number(),
+        tokenizedStocks: z.number(),
+        tokenizedGold: z.number(),
+    }),
+    strategyName: z.string(),
+    defaultAssets: z.object({
+        stableYields: z.string(),
+        tokenizedStocks: z.string(),
+        tokenizedGold: z.string(),
+    }),
+    rationale: z.string(),
+    expectedReturn: z.number(),
+    riskLevel: z.string(),
+});
+
 
 /**
  * Quiz Controller
@@ -20,30 +40,42 @@ class QuizController extends Controller {
         try {
             const userRepo: UserRepository = new UserRepository();
             const aiSessionRepo: AIAdvisorSessionRepository = new AIAdvisorSessionRepository();
-            
+
+            // Comes from requireInternalAuth middleware
             const userId = (req as any).userId;
 
             if (!userId) {
-                return res.send(
-                    super.response(
-                        super._401,
-                        null,
-                        ['Not authenticated']
-                    )
-                );
+                return res.send(super.response(super._401, null, ['Not authenticated']));
             }
 
-            const {
-                goal,
-                timeline,
-                riskTolerance,
-                investmentExperience,
-                currentSavings,
-                monthlySavings,
-                comfortableWithDollars,
-                priorities
-            } = req.body;
+            /**
+             * Support BOTH payload styles:
+             *  A) { answers: { primaryGoal, investmentTimeline, ... } }
+             *  B) { goal, timeline, riskTolerance, ... }  (legacy)
+             */
+            const a = (req.body?.answers && typeof req.body.answers === 'object')
+                ? req.body.answers
+                : req.body;
 
+            // Normalize field names
+            const goal = a.primaryGoal ?? a.goal;
+            const timeline = a.investmentTimeline ?? a.timeline;
+            const riskTolerance = a.riskTolerance;
+            const investmentExperience = a.investmentExperience;
+
+            const currentSavings = a.currentSavingsRange ?? a.currentSavings;
+            const monthlySavings = a.monthlySavingsRange ?? a.monthlySavings;
+
+            const comfortableWithDollars =
+                typeof a.comfortableWithDollars === 'boolean' ? a.comfortableWithDollars : true;
+
+            const priorities = Array.isArray(a.investmentPriorities)
+                ? a.investmentPriorities
+                : Array.isArray(a.priorities)
+                    ? a.priorities
+                    : [];
+
+            // Validate required quiz fields
             if (!goal || !timeline || !riskTolerance || !investmentExperience) {
                 return res.send(
                     super.response(
@@ -54,19 +86,19 @@ class QuizController extends Controller {
                 );
             }
 
-            // Save quiz answers
+            // Save quiz answers (DB)
             await userRepo.saveQuizAnswers(userId, {
                 primaryGoal: goal,
                 investmentTimeline: timeline,
-                riskTolerance: riskTolerance,
-                investmentExperience: investmentExperience,
+                riskTolerance,
+                investmentExperience,
                 currentSavingsRange: currentSavings,
                 monthlySavingsRange: monthlySavings,
-                comfortableWithDollars: comfortableWithDollars !== false,
-                investmentPriorities: priorities || []
+                comfortableWithDollars,
+                investmentPriorities: priorities
             });
 
-            // Create AI session
+            // Create AI session (DB)
             const aiSession = await aiSessionRepo.createQuizSession(userId, {
                 goal,
                 timeline,
@@ -78,7 +110,7 @@ class QuizController extends Controller {
                 priorities
             });
 
-            // Generate strategy using Claude AI
+            // Generate strategy (Claude/OpenAI depending on your implementation)
             const strategy = await QuizController.generateStrategy({
                 goal,
                 timeline,
@@ -90,21 +122,25 @@ class QuizController extends Controller {
                 priorities
             });
 
-            // Save AI response
-            await aiSessionRepo.saveStrategyResponse(aiSession.id, {
-                allocation: strategy.allocation,
-                strategyName: strategy.strategyName,
-                rationale: strategy.rationale,
-                expectedReturn: strategy.expectedReturn,
-                riskLevel: strategy.riskLevel
-            }, {
-                modelUsed: 'claude-sonnet-4-20250514',
-                inputTokens: strategy.usage?.input_tokens,
-                outputTokens: strategy.usage?.output_tokens,
-                latencyMs: strategy.latencyMs
-            });
+            // Save AI response (DB)
+            await aiSessionRepo.saveStrategyResponse(
+                aiSession.id,
+                {
+                    allocation: strategy.allocation,
+                    strategyName: strategy.strategyName,
+                    rationale: strategy.rationale,
+                    expectedReturn: strategy.expectedReturn,
+                    riskLevel: strategy.riskLevel
+                },
+                {
+                    modelUsed: strategy.modelUsed ?? 'unknown',
+                    inputTokens: strategy.usage?.input_tokens ?? strategy.usage?.inputTokens,
+                    outputTokens: strategy.usage?.output_tokens ?? strategy.usage?.outputTokens,
+                    latencyMs: strategy.latencyMs
+                }
+            );
 
-            // Save strategy
+            // Save strategy targets to user (DB)
             await userRepo.saveStrategy(userId, {
                 targetStableYieldsPercent: strategy.allocation.stableYields,
                 targetTokenizedStocksPercent: strategy.allocation.tokenizedStocks,
@@ -125,11 +161,11 @@ class QuizController extends Controller {
             };
 
             return res.send(super.response(super._200, quizData));
-
         } catch (error) {
             return res.send(super.response(super._500, null, super.ex(error)));
         }
     }
+
 
     /**
      * Accept or customize strategy (Screen 6)
@@ -141,7 +177,7 @@ class QuizController extends Controller {
         try {
             const userRepo: UserRepository = new UserRepository();
             const aiSessionRepo: AIAdvisorSessionRepository = new AIAdvisorSessionRepository();
-            
+
             const userId = (req as any).userId;
             const { sessionId, accepted, customAllocation } = req.body;
 
@@ -159,9 +195,9 @@ class QuizController extends Controller {
             await aiSessionRepo.recordUserDecision(sessionId, accepted);
 
             if (customAllocation) {
-                const total = customAllocation.stableYields + 
-                             customAllocation.tokenizedStocks + 
-                             customAllocation.tokenizedGold;
+                const total = customAllocation.stableYields +
+                    customAllocation.tokenizedStocks +
+                    customAllocation.tokenizedGold;
 
                 if (Math.abs(total - 100) > 0.01) {
                     return res.send(
@@ -242,75 +278,85 @@ class QuizController extends Controller {
     private static async generateStrategy(profile: any): Promise<any> {
         const startTime = Date.now();
 
+        const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
         const prompt = `You are a Kenyan investment advisor. Analyze this user profile and recommend a category allocation.
 
-User Profile:
-- Goal: ${profile.goal}
-- Timeline: ${profile.timeline}
-- Risk tolerance: ${profile.riskTolerance}
-- Investment experience: ${profile.investmentExperience}
-- Current savings: ${profile.currentSavings || 'Not specified'}
-- Monthly savings: ${profile.monthlySavings || 'Not specified'}
-- Comfortable with dollars: ${profile.comfortableWithDollars ? 'Yes' : 'No'}
-- Priorities: ${profile.priorities?.join(', ') || 'Not specified'}
+        User Profile:
+        - Goal: ${profile.goal}
+        - Timeline: ${profile.timeline}
+        - Risk tolerance: ${profile.riskTolerance}
+        - Investment experience: ${profile.investmentExperience}
+        - Current savings: ${profile.currentSavings || 'Not specified'}
+        - Monthly savings: ${profile.monthlySavings || 'Not specified'}
+        - Comfortable with dollars: ${profile.comfortableWithDollars ? 'Yes' : 'No'}
+        - Priorities: ${profile.priorities?.join(', ') || 'Not specified'}
 
-Available Assets for Phase 1 MVP:
-1. USDM (Stable Yield) - 5.0% APY, no volatility, USD-backed
-2. bCSPX (S&P 500) - ~10% avg return, medium volatility, requires Tier 2 & KYC
-3. PAXG (Gold) - Tracks gold price, low volatility, hedge asset
+        Available Assets for Phase 1 MVP:
+        1. USDM (Stable Yield) - 5.0% APY, no volatility, USD-backed
+        2. bCSPX (S&P 500) - ~10% avg return, medium volatility, requires Tier 2 & KYC
+        3. PAXG (Gold) - Tracks gold price, low volatility, hedge asset
 
-Generate a strategy with allocation percentages and return as JSON:
-{
-  "allocation": {
-    "stableYields": 80,
-    "tokenizedStocks": 15,
-    "tokenizedGold": 5
-  },
-  "strategyName": "Conservative Grower",
-  "defaultAssets": {
-    "stableYields": "USDM",
-    "tokenizedStocks": "bCSPX",
-    "tokenizedGold": "PAXG"
-  },
-  "rationale": "Your 3-5 year timeline and moderate risk tolerance suggest...",
-  "expectedReturn": 6.25,
-  "riskLevel": "Low-Medium"
-}`;
+        Return ONLY valid JSON matching the schema. Allocation must sum to 100.`;
 
         try {
-            const anthropic = new Anthropic({
-                apiKey: process.env.ANTHROPIC_API_KEY
-            });
-
-            const response = await anthropic.messages.create({
-                model: 'claude-sonnet-4-20250514',
-                max_tokens: 1500,
-                messages: [{ role: 'user', content: prompt }]
+            const response = await client.responses.create({
+                model: "gpt-4.1-mini",
+                input: prompt,
+                // “Structured Outputs” style:
+                text: {
+                    format: {
+                        type: "json_schema",
+                        name: "investment_strategy",
+                        schema: {
+                            type: "object",
+                            additionalProperties: false,
+                            properties: {
+                                allocation: {
+                                    type: "object",
+                                    additionalProperties: false,
+                                    properties: {
+                                        stableYields: { type: "number" },
+                                        tokenizedStocks: { type: "number" },
+                                        tokenizedGold: { type: "number" },
+                                    },
+                                    required: ["stableYields", "tokenizedStocks", "tokenizedGold"],
+                                },
+                                strategyName: { type: "string" },
+                                defaultAssets: {
+                                    type: "object",
+                                    additionalProperties: false,
+                                    properties: {
+                                        stableYields: { type: "string" },
+                                        tokenizedStocks: { type: "string" },
+                                        tokenizedGold: { type: "string" },
+                                    },
+                                    required: ["stableYields", "tokenizedStocks", "tokenizedGold"],
+                                },
+                                rationale: { type: "string" },
+                                expectedReturn: { type: "number" },
+                                riskLevel: { type: "string" },
+                            },
+                            required: ["allocation", "strategyName", "defaultAssets", "rationale", "expectedReturn", "riskLevel"],
+                        },
+                    },
+                },
             });
 
             const latencyMs = Date.now() - startTime;
 
-            const content = response.content[0];
-            if (content.type !== 'text') {
-                throw new Error('Unexpected response type from Claude');
-            }
+            // Responses API returns JSON text in output_text
+            const jsonText = response.output_text;
+            const parsed = StrategySchema.parse(JSON.parse(jsonText));
 
-            let jsonText = content.text;
-            const jsonMatch = jsonText.match(/```json\n([\s\S]*?)\n```/) || jsonText.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                jsonText = jsonMatch[1] || jsonMatch[0];
-            }
-
-            const strategy = JSON.parse(jsonText);
-
+            // attach basic usage if present
             return {
-                ...strategy,
+                ...parsed,
                 usage: response.usage,
-                latencyMs
+                latencyMs,
             };
-
-        } catch (error: any) {
-            console.error('Claude AI error:', error);
+        } catch (err) {
+            console.error("OpenAI strategy error:", err);
             return QuizController.getFallbackStrategy();
         }
     }

@@ -2,6 +2,7 @@ import { Repository } from "typeorm";
 import dotenv from "dotenv";
 import AppDataSource from "../configs/ormconfig";
 import { User } from "../models/user.entity";
+import { AuthMethod } from "../enums/AuthMethod";
 
 
 export class UserRepository {
@@ -149,5 +150,38 @@ export class UserRepository {
         } catch (error) {
             throw error;
         }
+    }
+
+    async getByPrivyUserId(privyUserId: string): Promise<User | null> {
+        return await this.repo.findOne({
+            where: { privyUserId, isActive: true }
+        });
+    }
+
+    async createFromPrivy(data: {
+        privyUserId: string;
+        phoneNumber?: string;
+        email?: string;
+        primaryAuthMethod: AuthMethod;
+    }): Promise<User> {
+        const user = this.repo.create({
+            privyUserId: data.privyUserId,
+            phoneNumber: data.phoneNumber,
+            email: data.email,
+            primaryAuthMethod: data.primaryAuthMethod,
+            isActive: true,
+            hasCompletedOnboarding: false,
+            hasCompletedQuiz: false
+        });
+
+        return await this.repo.save(user);
+    }
+
+    async linkPrivyAccount(userId: string, privyUserId: string): Promise<User | null> {
+        const user = await this.getById(userId);
+        if (!user) return null;
+
+        user.privyUserId = privyUserId;
+        return await this.repo.save(user);
     }
 }

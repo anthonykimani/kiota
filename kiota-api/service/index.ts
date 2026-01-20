@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import corsOptions from "./configs/corsconfig";
 import AppDataSource from "./configs/ormconfig";
+import { serverAdapter } from "./configs/bull-board.config";
 
 // Import routes
 import authRoutes from "./routes/index.auth";
@@ -12,6 +13,7 @@ import walletRoutes from "./routes/index.wallet";
 import dashboardRoutes from "./routes/index.dashboard";
 import depositRoutes from "./routes/index.deposit";
 import portfolioRoutes from "./routes/index.portfolio";
+import privyRoutes from "./routes/index.privy";
 
 // Load environment variables
 dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
@@ -28,6 +30,11 @@ app.enable("trust proxy");
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Bull Board - Job monitoring dashboard
+// WARNING: In production, add authentication middleware here!
+// app.use('/admin/queues', requireAdmin, serverAdapter.getRouter());
+app.use('/admin/queues', serverAdapter.getRouter());
+
 // Routes
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/quiz", quizRoutes);
@@ -35,6 +42,7 @@ app.use("/api/v1/wallet", walletRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
 app.use("/api/v1/deposit", depositRoutes);
 app.use("/api/v1/portfolio", portfolioRoutes);
+app.use("/api/v1/privyAuth/privy", privyRoutes)
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -56,7 +64,8 @@ app.get("/", (req, res) => {
             wallet: "/api/v1/wallet",
             dashboard: "/api/v1/dashboard",
             deposit: "/api/v1/deposit",
-            portfolio: "/api/v1/portfolio"
+            portfolio: "/api/v1/portfolio",
+            privyAuth: "/api/v1/auth/privy"
         }
     });
 });
@@ -86,6 +95,7 @@ async function startServer() {
         console.log(`📍 Port: ${PORT}`);
         console.log(`🌍 Environment: ${app.get("env")}`);
         console.log(`🔗 URL: http://localhost:${PORT}`);
+        console.log(`📊 Bull Board: http://localhost:${PORT}/admin/queues`);
         console.log(`🔌 WebSocket: Enabled`);
         console.log("═".repeat(50));
         console.log("\n📋 Available Routes:");

@@ -7,12 +7,14 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
+  Unique,
 } from 'typeorm';
 import { AssetType, PaymentMethod, TransactionStatus, TransactionType } from '../enums/Transaction';
 import { User } from './user.entity';
 
 @Entity('transactions')
 @Index(['userId', 'createdAt'])
+@Unique(['chain', 'txHash', 'logIndex']) // Ensures idempotency for onchain deposits
 export class Transaction {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -113,12 +115,24 @@ export class Transaction {
   @Column({ type: 'varchar', length: 10, nullable: true })
   chain: string; // base, celo, ethereum
 
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  tokenSymbol: string; // USDC, USDM, etc.
+
+  @Column({ type: 'varchar', length: 42, nullable: true })
+  tokenAddress: string; // ERC20 token contract address
+
+  @Column({ type: 'varchar', length: 42, nullable: true })
+  walletAddress: string; // User's wallet address for this transaction
+
   @Column({ type: 'varchar', length: 66, nullable: true })
   @Index()
   txHash: string; // Blockchain transaction hash
 
   @Column({ type: 'int', nullable: true })
   blockNumber: number;
+
+  @Column({ type: 'int', nullable: true })
+  logIndex: number; // Log index within transaction for onchain deposits
 
   @Column({ type: 'decimal', precision: 18, scale: 8, nullable: true })
   gasUsed: number;

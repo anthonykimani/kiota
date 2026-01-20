@@ -13,6 +13,79 @@ export class TransactionRepository {
         dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
     }
 
+    /**
+   * Idempotent onchain deposit creation.
+   * Requires UNIQUE constraint on (chain, txHash, logIndex) in transactions table.
+   */
+    async createOnchainDeposit(data: {
+        userId: string;
+        chain: string;              // "base"
+        tokenSymbol: string;        // "USDC"
+        tokenAddress: string;
+        walletAddress: string;
+        amountUsd: number;          // USDC treated as USD
+        txHash: string;
+        logIndex: number;
+        allocation: {
+            stableYields: number;
+            tokenizedStocks: number;
+            tokenizedGold: number;
+        };
+    }): Promise<Transaction> {
+        const txHash = data.txHash.toLowerCase();
+
+        // 1) If exists, return it (idempotent)
+        const existing = await this.repo.findOne({
+            where: {
+                chain: data.chain,
+                txHash,
+                logIndex: data.logIndex,
+            },
+        });
+
+        if (existing) return existing;
+
+        // 2) Create new
+        const tx = this.repo.create({
+            userId: data.userId,
+            type: TransactionType.DEPOSIT,
+            status: TransactionStatus.COMPLETED,
+            sourceAsset: AssetType.USDC,
+            sourceAmount: data.amountUsd,
+            destinationAsset: AssetType.USDC,
+            destinationAmount: data.amountUsd,
+            valueUsd: data.amountUsd,
+            chain: data.chain,
+            tokenSymbol: data.tokenSymbol,
+            tokenAddress: data.tokenAddress,
+            walletAddress: data.walletAddress,
+            txHash,
+            logIndex: data.logIndex,
+            allocation: data.allocation,
+            completedAt: new Date(),
+        });
+
+        return await this.repo.save(tx);
+    }
+
+    /**
+     * Allocated USDC = sum(COMPLETED deposits) - sum(COMPLETED withdrawals) (optional)
+     *
+     */
+    async getAllocatedUsdcUsd(userId: string): Promise<number> {
+        const qb = this.repo
+            .createQueryBuilder("t")
+            .select("COALESCE(SUM(t.valueUsd), 0)", "sum")
+            .where("t.userId = :userId", { userId })
+            .andWhere("t.status = :status", { status: TransactionStatus.COMPLETED })
+            .andWhere("t.chain = :chain", { chain: "base" })
+            .andWhere("t.tokenSymbol = :tokenSymbol", { tokenSymbol: "USDC" })
+            .andWhere("t.type = :type", { type: TransactionType.DEPOSIT });
+
+        const result = await qb.getRawOne<{ sum: string }>();
+        return Number(result?.sum ?? 0);
+    }
+
     // Screen 10b: Create deposit transaction
     async createDeposit(data: {
         userId: string;
@@ -93,7 +166,7 @@ export class TransactionRepository {
             transaction.txHash = blockchainData.txHash;
             transaction.chain = blockchainData.chain || 'base';
             transaction.completedAt = new Date();
-            
+
             return await this.repo.save(transaction);
         } catch (error) {
             throw error;
@@ -109,7 +182,7 @@ export class TransactionRepository {
             transaction.status = TransactionStatus.FAILED;
             transaction.failureReason = reason;
             transaction.failedAt = new Date();
-            
+
             return await this.repo.save(transaction);
         } catch (error) {
             throw error;

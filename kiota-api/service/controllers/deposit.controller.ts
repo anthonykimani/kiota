@@ -5,13 +5,365 @@ import { UserRepository } from '../repositories/user.repo';
 import { MarketDataRepository } from '../repositories/market-data.repo';
 import { WalletRepository } from '../repositories/wallet.repo';
 import Controller from './controller';
+import { createPublicClient, formatUnits, http, parseAbi, parseAbiItem } from 'viem';
 
+import { DepositSessionRepository } from '../repositories/deposit-session.repo';
+import { baseSepolia } from 'viem/chains';
+import { DEPOSIT_COMPLETION_QUEUE, ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE } from '../configs/queue.config';
+
+const BASE_RPC_URL = process.env.BASE_RPC_URL || '';
+const BASE_USDC_ADDRESS = process.env.BASE_USDC_ADDRESS || '';
+const DEPOSIT_CONFIRMATIONS_REQUIRED = Number(process.env.DEPOSIT_CONFIRMATIONS_REQUIRED || 2);
+
+// Viem public client
+const baseClient = createPublicClient({
+    chain: baseSepolia,
+    transport: http(BASE_RPC_URL),
+});
+
+// Viem ABI (minimal)
+const ERC20_ABI = parseAbi([
+    "function balanceOf(address owner) view returns (uint256)",
+]);
+
+const TRANSFER_EVENT = parseAbiItem(
+    "event Transfer(address indexed from, address indexed to, uint256 value)"
+);
 /**
  * Deposit Controller
  * Handles deposit/add money flow for Phase 1 MVP
  * Screen: 10 (Add Money Flow - 10a through 10e)
  */
 class DepositController extends Controller {
+    /**
+     * Create a deposit session ("intent")
+     * Frontend calls this when user taps "Add Funds" and you display the address.
+     * This does NOT move money; it creates an auditable session to match an onchain USDC transfer.
+     */
+    public static async createDepositIntent(req: Request, res: Response) {
+        try {
+            const userId = (req as any).userId;
+            if (!userId) {
+                return res.send(super.response(super._401, null, ['Not authenticated']));
+            }
+
+            const { expectedAmount, token, chain } = req.body || {};
+            const normalizedChain = (chain || 'base').toLowerCase();
+            const normalizedToken = (token || 'USDC').toUpperCase();
+
+            if (normalizedChain !== 'base') {
+                return res.send(super.response(super._400, null, ['Only Base is supported in MVP']));
+            }
+            if (normalizedToken !== 'USDC') {
+                return res.send(super.response(super._400, null, ['Only USDC is supported in MVP']));
+            }
+            if (!BASE_RPC_URL || !BASE_USDC_ADDRESS) {
+                return res.send(
+                    super.response(super._500, null, [
+                        'Missing BASE_RPC_URL or BASE_USDC_ADDRESS env vars'
+                    ])
+                );
+            }
+
+            const walletRepo = new WalletRepository();
+            const sessionRepo = new DepositSessionRepository();
+
+            const wallet = await walletRepo.getByUserId(userId);
+            if (!wallet?.address) {
+                return res.send(super.response(super._404, null, ['Wallet not found']));
+            }
+
+            // Create session time window
+            const createdAt = new Date();
+            const expiresAt = new Date(createdAt.getTime() + 60 * 60 * 1000); // 60 minutes
+
+            // Capture a block boundary so confirm() can scan deterministically.
+            const createdAtBlockNumber = Number(await baseClient.getBlockNumber());
+
+            // Matching constraints:
+            // - If expectedAmount provided, accept +/-5%
+            // - Else accept any amount >= 0.1 USDC
+            let minAmount: number | undefined;
+            let maxAmount: number | undefined;
+
+            if (expectedAmount != null) {
+                const amt = Number(expectedAmount);
+                if (!Number.isFinite(amt) || amt <= 0) {
+                    return res.send(super.response(super._400, null, ['expectedAmount must be a positive number']));
+                }
+                minAmount = amt * 0.95;
+                maxAmount = amt * 1.05;
+            } else {
+                minAmount = 0.1;
+                maxAmount = undefined;
+            }
+
+            // NOTE: You need to implement DepositSessionRepository.create in your codebase.
+            const session = await sessionRepo.create({
+                userId,
+                walletAddress: wallet.address,
+                chain: 'base',
+                tokenSymbol: 'USDC',
+                tokenAddress: BASE_USDC_ADDRESS,
+                expectedAmount: expectedAmount ?? null,
+                minAmount,
+                maxAmount,
+                status: 'AWAITING_TRANSFER',
+                createdAt,
+                expiresAt,
+                createdAtBlockNumber
+            });
+
+            // Queue job to scan blockchain for this deposit
+            // Job will run every 30 seconds until deposit is confirmed or session expires
+            await ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE.add(
+                {
+                    depositSessionId: session.id,
+                    userId
+                },
+                {
+                    repeat: {
+                        every: 30000, // Check every 30 seconds
+                        limit: 120 // Max 120 attempts (60 minutes total)
+                    },
+                    attempts: 3, // Retry each attempt 3 times if it fails
+                    backoff: {
+                        type: 'exponential',
+                        delay: 3000
+                    },
+                    jobId: `onchain-deposit-${session.id}`, // Prevents duplicate jobs
+                    removeOnComplete: true,
+                    removeOnFail: false
+                }
+            );
+
+            console.log(`✅ Queued onchain deposit confirmation job for session ${session.id}`);
+
+            return res.send(
+                super.response(super._201, {
+                    depositSessionId: session.id,
+                    depositAddress: wallet.address,
+                    chain: 'base',
+                    token: { symbol: 'USDC', address: BASE_USDC_ADDRESS },
+                    expiresAt
+                })
+            );
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
+        }
+    }
+
+    /**
+     * Confirm a deposit session.
+     * This scans USDC Transfer logs TO the user's wallet within the session window,
+     * binds the first unclaimed matching event, and credits the portfolio ONCE.
+     */
+    public static async confirmDeposit(req: Request, res: Response) {
+        try {
+            const userId = (req as any).userId;
+            if (!userId) {
+                return res.send(super.response(super._401, null, ['Not authenticated']));
+            }
+            if (!BASE_RPC_URL || !BASE_USDC_ADDRESS) {
+                return res.send(
+                    super.response(super._500, null, [
+                        'Missing BASE_RPC_URL or BASE_USDC_ADDRESS env vars'
+                    ])
+                );
+            }
+
+            const { depositSessionId } = req.body || {};
+            if (!depositSessionId) {
+                return res.send(super.response(super._400, null, ['depositSessionId is required']));
+            }
+
+            const sessionRepo = new DepositSessionRepository();
+            const txRepo = new TransactionRepository();
+            const portfolioRepo = new PortfolioRepository();
+            const userRepo = new UserRepository();
+            const walletRepo = new WalletRepository();
+
+            const session = await sessionRepo.getById(depositSessionId);
+            if (!session || session.userId !== userId) {
+                return res.send(super.response(super._404, null, ['Deposit session not found']));
+            }
+
+            // Expire sessions deterministically.
+            if (session.status === 'AWAITING_TRANSFER' && new Date() > new Date(session.expiresAt)) {
+                await sessionRepo.updateStatus(session.id, 'EXPIRED');
+                return res.send(super.response(super._400, null, ['Deposit session expired']));
+            }
+
+            // Idempotent return if already confirmed.
+            if (session.status === 'CONFIRMED') {
+                return res.send(
+                    super.response(super._200, {
+                        status: 'CONFIRMED',
+                        txHash: session.matchedTxHash,
+                        amount: session.matchedAmount,
+                        credited: true
+                    })
+                );
+            }
+
+            const createdAtBlockNumber = Number(await baseClient.getBlockNumber());
+            const latestBlock = Number(await baseClient.getBlockNumber());
+
+            // Use session boundary if available; fallback to a conservative window.
+            const fromBlock = Number.isFinite(Number(session.createdAtBlockNumber))
+                ? BigInt(session.createdAtBlockNumber)
+                : BigInt(Math.max(latestBlock - 5000, 0));
+
+            const logs = await baseClient.getLogs({
+                address: (session.tokenAddress || BASE_USDC_ADDRESS) as `0x${string}`,
+                event: TRANSFER_EVENT,
+                args: {
+                    to: session.walletAddress as `0x${string}`,
+                },
+                fromBlock,
+                toBlock: BigInt(latestBlock),
+            });
+
+            // newest-first
+            const createdAtMs = new Date(session.createdAt).getTime();
+            let matched: {
+                txHash: string;
+                logIndex: number;
+                blockNumber: number;
+                from: string;
+                to: string;
+                amount: number;
+            } | null = null;
+
+            for (const log of logs.slice().reverse()) {
+                // viem gives you blockNumber but not timestamp; fetch block for timestamp
+                const block = await baseClient.getBlock({ blockNumber: log.blockNumber! });
+                const blockMs = Number(block.timestamp) * 1000;
+                if (blockMs < createdAtMs) continue;
+
+                const amount = Number(formatUnits(log.args.value!, 6)); // USDC 6 decimals
+                const from = (log.args.from || "").toLowerCase();
+                const to = (log.args.to || "").toLowerCase();
+
+                if (session.minAmount != null && amount < Number(session.minAmount)) continue;
+                if (session.maxAmount != null && amount > Number(session.maxAmount)) continue;
+
+                const alreadyProcessed = await sessionRepo.isEventProcessed({
+                    chain: "base",
+                    txHash: log.transactionHash.toLowerCase(),
+                    logIndex: Number(log.logIndex),
+                });
+                if (alreadyProcessed) continue;
+
+                matched = {
+                    txHash: log.transactionHash.toLowerCase(),
+                    logIndex: Number(log.logIndex),
+                    blockNumber: Number(log.blockNumber),
+                    from,
+                    to,
+                    amount,
+                };
+                break;
+            }
+
+            if (!matched) {
+                return res.send(super.response(super._200, { status: "AWAITING_TRANSFER" }));
+            }
+
+            const confirmations = latestBlock - matched.blockNumber + 1;
+
+
+            // Bind the event to the session (even if not yet confirmed)
+            await sessionRepo.bindOnchainEvent(session.id, {
+                txHash: matched.txHash,
+                logIndex: matched.logIndex,
+                fromAddress: matched.from,
+                amount: matched.amount,
+                blockNumber: matched.blockNumber
+            });
+
+            if (confirmations < DEPOSIT_CONFIRMATIONS_REQUIRED) {
+                await sessionRepo.updateStatus(session.id, 'RECEIVED');
+                return res.send(
+                    super.response(super._200, {
+                        status: 'RECEIVED',
+                        txHash: matched.txHash,
+                        amount: matched.amount,
+                        confirmations
+                    })
+                );
+            }
+
+            // Mark processed FIRST to make crediting idempotent even on retries.
+            await sessionRepo.markEventProcessed({
+                chain: 'base',
+                txHash: matched.txHash,
+                logIndex: matched.logIndex
+            });
+
+            // Credit portfolio/categories using user's latest target allocation
+            const user = await userRepo.getById(userId);
+            const wallet = await walletRepo.getByUserId(userId);
+            const portfolio = await portfolioRepo.getByUserId(userId);
+            if (!user || !wallet || !portfolio) {
+                return res.send(super.response(super._404, null, ['User, wallet or portfolio not found']));
+            }
+
+            const allocation = {
+                stableYields: user.targetStableYieldsPercent || 80,
+                tokenizedStocks: user.targetTokenizedStocksPercent || 15,
+                tokenizedGold: user.targetTokenizedGoldPercent || 5
+            };
+
+            // NOTE: Implement txRepo.createOnchainDeposit in your TransactionRepository.
+            const transaction = await txRepo.createOnchainDeposit({
+                userId,
+                chain: 'base',
+                tokenSymbol: 'USDC',
+                tokenAddress: session.tokenAddress || BASE_USDC_ADDRESS,
+                walletAddress: wallet.address,
+                amountUsd: matched.amount,
+                txHash: matched.txHash,
+                logIndex: matched.logIndex,
+                allocation
+            });
+
+            // For MVP, we treat USDC amount as USD value directly.
+            await portfolioRepo.updateValues(userId, {
+                stableYieldsValueUsd: matched.amount * ((allocation.stableYields || 0) / 100),
+                tokenizedStocksValueUsd: matched.amount * ((allocation.tokenizedStocks || 0) / 100),
+                tokenizedGoldValueUsd: matched.amount * ((allocation.tokenizedGold || 0) / 100),
+                kesUsdRate: 0
+            });
+
+            await portfolioRepo.recordDeposit(userId, matched.amount);
+            await portfolioRepo.calculateReturns(userId);
+
+            // OPTIONAL: You can stop writing category balances into wallet table for MVP,
+            // but keeping it won't break anything if your UI expects it.
+            await walletRepo.updateBalances(userId, {
+                stableYieldBalance: matched.amount * ((allocation.stableYields || 0) / 100),
+                tokenizedStocksBalance: matched.amount * ((allocation.tokenizedStocks || 0) / 100),
+                tokenizedGoldBalance: matched.amount * ((allocation.tokenizedGold || 0) / 100)
+            } as any);
+
+            await sessionRepo.updateStatus(session.id, 'CONFIRMED');
+
+            return res.send(
+                super.response(super._200, {
+                    status: 'CONFIRMED',
+                    txHash: matched.txHash,
+                    amount: matched.amount,
+                    confirmations,
+                    credited: true,
+                    transactionId: transaction?.id
+                })
+            );
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
+        }
+    }
+
     /**
      * Initiate deposit (Screens 10a & 10b)
      * @param req Express Request
@@ -24,7 +376,7 @@ class DepositController extends Controller {
             const portfolioRepo: PortfolioRepository = new PortfolioRepository();
             const userRepo: UserRepository = new UserRepository();
             const marketDataRepo: MarketDataRepository = new MarketDataRepository();
-            
+
             const userId = (req as any).userId;
 
             if (!userId) {
@@ -80,9 +432,9 @@ class DepositController extends Controller {
 
             let allocation;
             if (customAllocation) {
-                const total = customAllocation.stableYields + 
-                             customAllocation.tokenizedStocks + 
-                             customAllocation.tokenizedGold;
+                const total = customAllocation.stableYields +
+                    customAllocation.tokenizedStocks +
+                    customAllocation.tokenizedGold;
 
                 if (Math.abs(total - 100) > 0.01) {
                     return res.send(
@@ -179,7 +531,7 @@ class DepositController extends Controller {
     public static async triggerMpesaPush(req: Request, res: Response) {
         try {
             const transactionRepo: TransactionRepository = new TransactionRepository();
-            
+
             const userId = (req as any).userId;
             const { transactionId } = req.body;
 
@@ -235,7 +587,7 @@ class DepositController extends Controller {
     public static async mpesaCallback(req: Request, res: Response) {
         try {
             const transactionRepo: TransactionRepository = new TransactionRepository();
-            
+
             const { CheckoutRequestID, ResultCode, ResultDesc, CallbackMetadata } = req.body;
 
             // Find transaction
@@ -249,10 +601,33 @@ class DepositController extends Controller {
             if (ResultCode === 0 && CallbackMetadata) {
                 const mpesaReceiptNumber = CallbackMetadata.MpesaReceiptNumber;
 
-                // Update transaction
+                // Update transaction to PROCESSING
                 await transactionRepo.markAsProcessing(transaction.id, mpesaReceiptNumber);
 
                 console.log(`Processing transaction ${transaction.id} with receipt ${mpesaReceiptNumber}`);
+
+                // Add job to queue for blockchain confirmation
+                // The worker will pick this up and complete the deposit
+                await DEPOSIT_COMPLETION_QUEUE.add(
+                    {
+                        transactionId: transaction.id,
+                        txHash: `pending_${Date.now()}`, // Temporary - will be replaced by actual txHash
+                        blockchainData: {
+                            chain: 'base'
+                        }
+                    },
+                    {
+                        attempts: 5, // Retry up to 5 times (blockchain can be flaky)
+                        backoff: {
+                            type: 'exponential',
+                            delay: 5000 // Start with 5 second delay
+                        },
+                        removeOnComplete: true,
+                        removeOnFail: false // Keep failed jobs for debugging
+                    }
+                );
+
+                console.log(`✅ Queued deposit completion job for transaction ${transaction.id}`);
             } else {
                 // Mark as failed
                 await transactionRepo.markAsFailed(transaction.id, ResultDesc);
@@ -275,7 +650,7 @@ class DepositController extends Controller {
     public static async getTransactionStatus(req: Request, res: Response) {
         try {
             const transactionRepo: TransactionRepository = new TransactionRepository();
-            
+
             const userId = (req as any).userId;
             const { transactionId } = req.params;
 
@@ -322,7 +697,7 @@ class DepositController extends Controller {
             const portfolioRepo: PortfolioRepository = new PortfolioRepository();
             const userRepo: UserRepository = new UserRepository();
             const walletRepo: WalletRepository = new WalletRepository();
-            
+
             const { transactionId, txHash, blockchainData } = req.body;
 
             if (!transactionId || !txHash) {

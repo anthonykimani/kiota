@@ -40,14 +40,26 @@ export class Wallet {
   primaryChain: WalletChain;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  privyUserId: string; 
+  privyUserId: string;
 
   @Column({ type: 'boolean', default: false })
-  isSmartAccount: boolean; 
+  isSmartAccount: boolean;
 
   @Column({ type: 'varchar', length: 42, nullable: true })
   smartAccountAddress: string; // If using AA
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  privyWalletId: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'user_owned_server_access', nullable: true })
+  controlMode: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  serverPermissions: {
+    canSign: boolean;
+    canSendTransactions: boolean;
+    policies?: string[];
+  };
   // Cached balances (updated via background job)
   @Column({ type: 'decimal', precision: 18, scale: 8, default: 0 })
   usdcBalance: number;

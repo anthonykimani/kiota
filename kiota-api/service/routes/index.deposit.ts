@@ -1,16 +1,21 @@
 import express from "express";
 import DepositController from "../controllers/deposit.controller";
+import { requireInternalAuth } from "../middleware/auth";
 
 const router = express.Router();
 
-// Deposit flow
-router.post('/initiate', DepositController.initiateDeposit);
-router.post('/trigger-mpesa', DepositController.triggerMpesaPush);
-router.post('/mpesa-callback', DepositController.mpesaCallback);
-router.get('/status/:transactionId', DepositController.getTransactionStatus);
+// M-Pesa deposit flow
+router.post('/initiate', requireInternalAuth, DepositController.initiateDeposit);
+router.post('/trigger-mpesa', requireInternalAuth, DepositController.triggerMpesaPush);
+router.post('/mpesa-callback', requireInternalAuth, DepositController.mpesaCallback);
+router.get('/status/:transactionId', requireInternalAuth, DepositController.getTransactionStatus);
+
+// Onchain USDC deposit flow
+router.post('/intent/create', requireInternalAuth, DepositController.createDepositIntent);
+router.post('/intent/confirm', requireInternalAuth, DepositController.confirmDeposit);
 
 // Background job endpoint
-router.post('/complete', DepositController.completeDeposit);
+router.post('/complete', requireInternalAuth, DepositController.completeDeposit);
 
 // Catch-all route - must be last
 router.use((req, res) => {
