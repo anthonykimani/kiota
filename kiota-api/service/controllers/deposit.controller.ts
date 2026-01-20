@@ -9,6 +9,7 @@ import { createPublicClient, formatUnits, http, parseAbi, parseAbiItem } from 'v
 
 import { DepositSessionRepository } from '../repositories/deposit-session.repo';
 import { baseSepolia } from 'viem/chains';
+import { DEPOSIT_COMPLETION_QUEUE, ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE } from '../configs/queue.config';
 
 const BASE_RPC_URL = process.env.BASE_RPC_URL || '';
 const BASE_USDC_ADDRESS = process.env.BASE_USDC_ADDRESS || '';
@@ -112,6 +113,31 @@ class DepositController extends Controller {
                 expiresAt,
                 createdAtBlockNumber
             });
+
+            // Queue job to scan blockchain for this deposit
+            // Job will run every 30 seconds until deposit is confirmed or session expires
+            await ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE.add(
+                {
+                    depositSessionId: session.id,
+                    userId
+                },
+                {
+                    repeat: {
+                        every: 30000, // Check every 30 seconds
+                        limit: 120 // Max 120 attempts (60 minutes total)
+                    },
+                    attempts: 3, // Retry each attempt 3 times if it fails
+                    backoff: {
+                        type: 'exponential',
+                        delay: 3000
+                    },
+                    jobId: `onchain-deposit-${session.id}`, // Prevents duplicate jobs
+                    removeOnComplete: true,
+                    removeOnFail: false
+                }
+            );
+
+            console.log(`✅ Queued onchain deposit confirmation job for session ${session.id}`);
 
             return res.send(
                 super.response(super._201, {
@@ -575,10 +601,33 @@ class DepositController extends Controller {
             if (ResultCode === 0 && CallbackMetadata) {
                 const mpesaReceiptNumber = CallbackMetadata.MpesaReceiptNumber;
 
-                // Update transaction
+                // Update transaction to PROCESSING
                 await transactionRepo.markAsProcessing(transaction.id, mpesaReceiptNumber);
 
                 console.log(`Processing transaction ${transaction.id} with receipt ${mpesaReceiptNumber}`);
+
+                // Add job to queue for blockchain confirmation
+                // The worker will pick this up and complete the deposit
+                await DEPOSIT_COMPLETION_QUEUE.add(
+                    {
+                        transactionId: transaction.id,
+                        txHash: `pending_${Date.now()}`, // Temporary - will be replaced by actual txHash
+                        blockchainData: {
+                            chain: 'base'
+                        }
+                    },
+                    {
+                        attempts: 5, // Retry up to 5 times (blockchain can be flaky)
+                        backoff: {
+                            type: 'exponential',
+                            delay: 5000 // Start with 5 second delay
+                        },
+                        removeOnComplete: true,
+                        removeOnFail: false // Keep failed jobs for debugging
+                    }
+                );
+
+                console.log(`✅ Queued deposit completion job for transaction ${transaction.id}`);
             } else {
                 // Mark as failed
                 await transactionRepo.markAsFailed(transaction.id, ResultDesc);

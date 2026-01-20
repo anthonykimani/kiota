@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import corsOptions from "./configs/corsconfig";
 import AppDataSource from "./configs/ormconfig";
+import { serverAdapter } from "./configs/bull-board.config";
 
 // Import routes
 import authRoutes from "./routes/index.auth";
@@ -28,6 +29,11 @@ app.disable("x-powered-by");
 app.enable("trust proxy");
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// Bull Board - Job monitoring dashboard
+// WARNING: In production, add authentication middleware here!
+// app.use('/admin/queues', requireAdmin, serverAdapter.getRouter());
+app.use('/admin/queues', serverAdapter.getRouter());
 
 // Routes
 app.use("/api/v1/auth", authRoutes);
@@ -89,6 +95,7 @@ async function startServer() {
         console.log(`📍 Port: ${PORT}`);
         console.log(`🌍 Environment: ${app.get("env")}`);
         console.log(`🔗 URL: http://localhost:${PORT}`);
+        console.log(`📊 Bull Board: http://localhost:${PORT}/admin/queues`);
         console.log(`🔌 WebSocket: Enabled`);
         console.log("═".repeat(50));
         console.log("\n📋 Available Routes:");
