@@ -3,11 +3,15 @@ import AppDataSource from '../configs/ormconfig';
 import {
   DEPOSIT_COMPLETION_QUEUE,
   ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE,
+  SWAP_EXECUTION_QUEUE,
+  SWAP_CONFIRMATION_QUEUE,
   checkQueueHealth,
   closeQueues,
 } from '../configs/queue.config';
 import { processDepositCompletion } from './processors/deposit-completion.processor';
 import { processOnchainDepositConfirmation } from './processors/onchain-deposit-confirmation.processor';
+import { processSwapExecution } from './processors/swap-execution.processor';
+import { processSwapConfirmation } from './processors/swap-confirmation.processor';
 import { monitoringService } from '../services/monitoring.service';
 
 // Load environment variables
@@ -77,6 +81,30 @@ async function startWorker() {
       await processOnchainDepositConfirmation(job);
     });
 
+    /**
+     * SWAP EXECUTION QUEUE
+     *
+     * Concurrency: 5
+     * - Execute up to 5 swaps simultaneously
+     * - Places orders with 1inch Fusion API
+     */
+    SWAP_EXECUTION_QUEUE.process(5, async (job) => {
+      console.log(`\n[${new Date().toISOString()}] Processing job ${job.id}`);
+      await processSwapExecution(job);
+    });
+
+    /**
+     * SWAP CONFIRMATION QUEUE
+     *
+     * Concurrency: 3
+     * - Poll up to 3 swap confirmations simultaneously
+     * - Polls 1inch order status every 30s
+     */
+    SWAP_CONFIRMATION_QUEUE.process(3, async (job) => {
+      console.log(`\n[${new Date().toISOString()}] Processing job ${job.id}`);
+      await processSwapConfirmation(job);
+    });
+
     console.log('✅ Job processors registered');
 
     // Step 4: Set up event listeners for monitoring
@@ -85,6 +113,8 @@ async function startWorker() {
     // Initialize monitoring for queues
     monitoringService.initQueue('deposit-completion');
     monitoringService.initQueue('onchain-deposit-confirmation');
+    monitoringService.initQueue('swap-execution');
+    monitoringService.initQueue('swap-confirmation');
 
     // Deposit completion queue events
     DEPOSIT_COMPLETION_QUEUE.on('completed', (job, result) => {
@@ -122,6 +152,42 @@ async function startWorker() {
       monitoringService.recordStalled('onchain-deposit-confirmation', job.id.toString());
     });
 
+    // Swap execution queue events
+    SWAP_EXECUTION_QUEUE.on('completed', (job, result) => {
+      console.log(`✅ [swap-execution] Job ${job.id} completed successfully`);
+      monitoringService.recordSuccess('swap-execution', job.id.toString());
+    });
+
+    SWAP_EXECUTION_QUEUE.on('failed', (job, err) => {
+      console.error(`❌ [swap-execution] Job ${job?.id} failed:`, err.message);
+      if (job) {
+        monitoringService.recordFailure('swap-execution', job.id.toString(), err);
+      }
+    });
+
+    SWAP_EXECUTION_QUEUE.on('stalled', (job) => {
+      console.warn(`⚠️  [swap-execution] Job ${job.id} stalled (worker crashed?)`);
+      monitoringService.recordStalled('swap-execution', job.id.toString());
+    });
+
+    // Swap confirmation queue events
+    SWAP_CONFIRMATION_QUEUE.on('completed', (job, result) => {
+      console.log(`✅ [swap-confirmation] Job ${job.id} completed successfully`);
+      monitoringService.recordSuccess('swap-confirmation', job.id.toString());
+    });
+
+    SWAP_CONFIRMATION_QUEUE.on('failed', (job, err) => {
+      console.error(`❌ [swap-confirmation] Job ${job?.id} failed:`, err.message);
+      if (job) {
+        monitoringService.recordFailure('swap-confirmation', job.id.toString(), err);
+      }
+    });
+
+    SWAP_CONFIRMATION_QUEUE.on('stalled', (job) => {
+      console.warn(`⚠️  [swap-confirmation] Job ${job.id} stalled (worker crashed?)`);
+      monitoringService.recordStalled('swap-confirmation', job.id.toString());
+    });
+
     console.log('✅ Event listeners registered with monitoring');
 
     // Step 5: Worker is ready!
@@ -131,6 +197,8 @@ async function startWorker() {
     console.log('\nQueues:');
     console.log('  • deposit-completion (concurrency: 5)');
     console.log('  • onchain-deposit-confirmation (concurrency: 3)');
+    console.log('  • swap-execution (concurrency: 5)');
+    console.log('  • swap-confirmation (concurrency: 3)');
     console.log('\nPress Ctrl+C to stop worker\n');
   } catch (error) {
     console.error('\n❌ Failed to start worker:', error);
@@ -156,6 +224,8 @@ async function gracefulShutdown(signal: string) {
     console.log('🛑 Pausing queues...');
     await DEPOSIT_COMPLETION_QUEUE.pause();
     await ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE.pause();
+    await SWAP_EXECUTION_QUEUE.pause();
+    await SWAP_CONFIRMATION_QUEUE.pause();
 
     // Wait for active jobs to finish (timeout: 30s)
     console.log('⏳ Waiting for active jobs to finish (30s timeout)...');
@@ -163,6 +233,8 @@ async function gracefulShutdown(signal: string) {
       Promise.all([
         DEPOSIT_COMPLETION_QUEUE.whenCurrentJobsFinished(),
         ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE.whenCurrentJobsFinished(),
+        SWAP_EXECUTION_QUEUE.whenCurrentJobsFinished(),
+        SWAP_CONFIRMATION_QUEUE.whenCurrentJobsFinished(),
       ]),
       new Promise((resolve) => setTimeout(resolve, 30000)),
     ]);

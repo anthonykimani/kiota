@@ -13,6 +13,7 @@ import walletRoutes from "./routes/index.wallet";
 import dashboardRoutes from "./routes/index.dashboard";
 import depositRoutes from "./routes/index.deposit";
 import portfolioRoutes from "./routes/index.portfolio";
+import swapRoutes from "./routes/index.swap";
 import privyRoutes from "./routes/index.privy";
 
 // Load environment variables
@@ -42,6 +43,7 @@ app.use("/api/v1/wallet", walletRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
 app.use("/api/v1/deposit", depositRoutes);
 app.use("/api/v1/portfolio", portfolioRoutes);
+app.use("/api/v1/swap", swapRoutes);
 app.use("/api/v1/privyAuth/privy", privyRoutes)
 
 // Health check endpoint
@@ -65,6 +67,7 @@ app.get("/", (req, res) => {
             dashboard: "/api/v1/dashboard",
             deposit: "/api/v1/deposit",
             portfolio: "/api/v1/portfolio",
+            swap: "/api/v1/swap",
             privyAuth: "/api/v1/auth/privy"
         }
     });
@@ -107,7 +110,13 @@ async function startServer() {
         console.log(`   • POST   /api/v1/wallet/create`);
         console.log(`   • GET    /api/v1/dashboard`);
         console.log(`   • POST   /api/v1/deposit/initiate`);
+        console.log(`   • POST   /api/v1/deposit/convert`);
         console.log(`   • GET    /api/v1/portfolio/detail`);
+        console.log(`   • POST   /api/v1/portfolio/rebalance`);
+        console.log(`   • GET    /api/v1/swap/quote`);
+        console.log(`   • POST   /api/v1/swap/execute`);
+        console.log(`   • GET    /api/v1/swap/status/:transactionId`);
+        console.log(`   • GET    /api/v1/swap/history`);
         console.log("═".repeat(50));
     });
 

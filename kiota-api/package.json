@@ -16,6 +16,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@1inch/fusion-sdk": "^2.4.5",
     "@anthropic-ai/sdk": "^0.71.2",
     "@bull-board/api": "^6.16.2",
     "@bull-board/express": "^6.16.2",
@@ -33,6 +34,7 @@
     "bull": "^4.16.5",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
+    "ethers": "^6.16.0",
     "express": "^5.2.1",
     "ioredis": "^5.9.2",
     "jsonwebtoken": "^9.0.3",

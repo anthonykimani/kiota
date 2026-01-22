@@ -63,6 +63,33 @@ export const ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE = new Queue(
 );
 
 /**
+ * SWAP_EXECUTION_QUEUE
+ *
+ * Executes swaps by placing orders with 1inch Fusion API
+ *
+ * Flow:
+ * 1. User initiates swap via API or deposit conversion
+ * 2. Job added to queue with swap details
+ * 3. Worker picks up job and places order with 1inch
+ * 4. Order hash saved to transaction metadata
+ * 5. Confirmation job queued to poll order status
+ */
+export const SWAP_EXECUTION_QUEUE = new Queue('swap-execution', queueOptions);
+
+/**
+ * SWAP_CONFIRMATION_QUEUE
+ *
+ * Polls 1inch order status and confirms swaps
+ *
+ * Flow:
+ * 1. Swap order placed with 1inch
+ * 2. Job added to queue to poll order status every 30s
+ * 3. Once order filled, credits balances atomically
+ * 4. If order fails, marks transaction as failed
+ */
+export const SWAP_CONFIRMATION_QUEUE = new Queue('swap-confirmation', queueOptions);
+
+/**
  * Health check for queue system
  * Call this on app startup to ensure Redis is connected
  */
@@ -70,6 +97,8 @@ export async function checkQueueHealth(): Promise<boolean> {
   try {
     await DEPOSIT_COMPLETION_QUEUE.isReady();
     await ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE.isReady();
+    await SWAP_EXECUTION_QUEUE.isReady();
+    await SWAP_CONFIRMATION_QUEUE.isReady();
     console.log('✅ Queue system connected to Redis');
     return true;
   } catch (error) {
@@ -85,5 +114,7 @@ export async function checkQueueHealth(): Promise<boolean> {
 export async function closeQueues(): Promise<void> {
   await DEPOSIT_COMPLETION_QUEUE.close();
   await ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE.close();
+  await SWAP_EXECUTION_QUEUE.close();
+  await SWAP_CONFIRMATION_QUEUE.close();
   console.log('🔌 Queue connections closed');
 }

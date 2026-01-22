@@ -14,6 +14,9 @@ router.get('/status/:transactionId', requireInternalAuth, DepositController.getT
 router.post('/intent/create', requireInternalAuth, DepositController.createDepositIntent);
 router.post('/intent/confirm', requireInternalAuth, DepositController.confirmDeposit);
 
+// Deposit conversion (USDC → target allocation)
+router.post('/convert', requireInternalAuth, DepositController.convertDeposit);
+
 // Background job endpoint
 router.post('/complete', requireInternalAuth, DepositController.completeDeposit);
 

@@ -3,6 +3,7 @@ import { PortfolioRepository } from '../repositories/portfolio.repo';
 import { TransactionRepository } from '../repositories/transaction.repo';
 import { MarketDataRepository } from '../repositories/market-data.repo';
 import { UserRepository } from '../repositories/user.repo';
+import { WalletRepository } from '../repositories/wallet.repo';
 import { AssetSymbol } from '../enums/MarketData';
 import Controller from './controller';
 
@@ -304,8 +305,10 @@ class PortfolioController extends Controller {
         try {
             const portfolioRepo: PortfolioRepository = new PortfolioRepository();
             const userRepo: UserRepository = new UserRepository();
-            
+            const walletRepo = new WalletRepository();
+
             const userId = (req as any).userId;
+            const { force = false } = req.body || {};
 
             if (!userId) {
                 return res.send(
@@ -317,43 +320,151 @@ class PortfolioController extends Controller {
                 );
             }
 
-            // Get portfolio
+            // Get portfolio and user
             const portfolio = await portfolioRepo.getByUserId(userId);
-            // Get user
             const user = await userRepo.getById(userId);
+            const wallet = await walletRepo.getByUserId(userId);
 
-            if (!portfolio || !user) {
+            if (!portfolio || !user || !wallet) {
                 return res.send(
                     super.response(
                         super._404,
                         null,
-                        ['Portfolio or user not found']
+                        ['Portfolio, user, or wallet not found']
                     )
                 );
             }
 
-            if (!PortfolioController.checkRebalanceNeeded(portfolio, user)) {
+            // Check if rebalance is needed (unless forced)
+            if (!force && !PortfolioController.checkRebalanceNeeded(portfolio, user)) {
                 return res.send(
                     super.response(
                         super._400,
                         null,
-                        ['Portfolio does not need rebalancing (drift < 5%)']
+                        ['Portfolio does not need rebalancing (drift < 5%). Use force=true to rebalance anyway.']
                     )
                 );
             }
 
+            // Import rebalance service and token config
+            const { rebalanceService } = await import('../services/rebalance.service');
+            const { getCategoryAsset } = await import('../configs/tokens.config');
+            const { SwapRepository } = await import('../repositories/swap.repo');
+            const { SWAP_EXECUTION_QUEUE } = await import('../configs/queue.config');
+            const { v4: uuidv4 } = await import('uuid');
+
+            // Prepare data for rebalance calculation
+            const currentAllocation = {
+                stableYields: Number(portfolio.stableYieldsPercent),
+                tokenizedStocks: Number(portfolio.tokenizedStocksPercent),
+                tokenizedGold: Number(portfolio.tokenizedGoldPercent),
+            };
+
+            const targetAllocation = {
+                stableYields: Number(user.targetStableYieldsPercent),
+                tokenizedStocks: Number(user.targetTokenizedStocksPercent),
+                tokenizedGold: Number(user.targetTokenizedGoldPercent),
+            };
+
+            const currentBalances = {
+                USDC: Number(wallet.usdcBalance) || 0,
+                USDM: Number(wallet.stableYieldBalance) || 0,
+                BCSPX: Number(wallet.tokenizedStocksBalance) || 0,
+                PAXG: Number(wallet.tokenizedGoldBalance) || 0,
+            };
+
+            const totalValueUsd = Number(portfolio.totalValueUsd);
+
+            // Calculate required swaps
+            const rebalanceResult = rebalanceService.calculateRebalance({
+                currentAllocation,
+                targetAllocation,
+                totalValueUsd,
+                currentBalances,
+            });
+
+            if (rebalanceResult.swaps.length === 0) {
+                return res.send(
+                    super.response(
+                        super._400,
+                        {
+                            message: 'No swaps needed',
+                            currentAllocation,
+                            targetAllocation,
+                            drift: rebalanceResult.drift,
+                        },
+                        ['Portfolio is already balanced or swaps would be < $1']
+                    )
+                );
+            }
+
+            // Create rebalance group ID (links all swaps in same rebalance operation)
+            const rebalanceGroupId = uuidv4();
+
+            // Create swap transactions and queue execution jobs
+            const swapRepo = new SwapRepository();
+            const createdSwaps = [];
+
+            for (const swap of rebalanceResult.swaps) {
+                // Get quote for estimated output (simplified - just use 1:1 for now)
+                const estimatedToAmount = swap.fromAmount * 0.998; // Assume 0.2% slippage
+
+                // Create swap transaction
+                const transaction = await swapRepo.createSwap({
+                    userId,
+                    fromAsset: swap.fromAsset,
+                    toAsset: swap.toAsset,
+                    fromAmount: swap.fromAmount,
+                    estimatedToAmount,
+                    slippage: 1.0,
+                    metadata: {
+                        rebalanceGroupId,
+                        initiatedVia: 'rebalance-endpoint',
+                    },
+                    type: 'rebalance' as any, // TransactionType.REBALANCE
+                });
+
+                // Queue swap execution job
+                await SWAP_EXECUTION_QUEUE.add(
+                    {
+                        transactionId: transaction.id,
+                        userId,
+                        fromAsset: swap.fromAsset,
+                        toAsset: swap.toAsset,
+                        amount: swap.fromAmount,
+                        slippage: 1.0,
+                    },
+                    {
+                        attempts: 3,
+                        backoff: {
+                            type: 'exponential',
+                            delay: 2000,
+                        },
+                        jobId: `swap-execute-${transaction.id}`,
+                        removeOnComplete: true,
+                        removeOnFail: false,
+                    }
+                );
+
+                createdSwaps.push({
+                    transactionId: transaction.id,
+                    fromAsset: swap.fromAsset,
+                    toAsset: swap.toAsset,
+                    amount: swap.fromAmount,
+                });
+            }
+
+            // Return rebalance plan
             const rebalanceData = {
-                estimatedCompletionTime: '2-5 minutes',
-                currentAllocation: {
-                    stableYields: portfolio.stableYieldsPercent,
-                    tokenizedStocks: portfolio.tokenizedStocksPercent,
-                    tokenizedGold: portfolio.tokenizedGoldPercent
-                },
-                targetAllocation: {
-                    stableYields: user.targetStableYieldsPercent,
-                    tokenizedStocks: user.targetTokenizedStocksPercent,
-                    tokenizedGold: user.targetTokenizedGoldPercent
-                }
+                rebalanceGroupId,
+                status: 'pending',
+                estimatedCompletionTime: '5-10 minutes',
+                currentAllocation,
+                targetAllocation,
+                drift: rebalanceResult.drift.toFixed(2),
+                totalSwapValue: rebalanceResult.totalSwapValue.toFixed(2),
+                requiredSwaps: createdSwaps,
+                swapCount: createdSwaps.length,
             };
 
             return res.send(super.response(super._200, rebalanceData));
