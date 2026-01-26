@@ -774,6 +774,255 @@ class DepositController extends Controller {
     }
 
     /**
+     * Convert USDC deposit to user's target allocation
+     * Called after onchain USDC deposit is confirmed
+     *
+     * Body:
+     * - depositSessionId: string (UUID)
+     *
+     * Flow:
+     * 1. Get deposit session
+     * 2. Verify it's confirmed
+     * 3. Get user's target allocation (80% USDM, 15% bCSPX, 5% PAXG)
+     * 4. Calculate swap amounts
+     * 5. Create SWAP transactions for each target asset
+     * 6. Queue SWAP_EXECUTION_QUEUE jobs
+     */
+    public static async convertDeposit(req: Request, res: Response) {
+        try {
+            const userId = (req as any).userId;
+            if (!userId) {
+                return res.send(super.response(super._401, null, ['Not authenticated']));
+            }
+
+            const { depositSessionId } = req.body || {};
+
+            if (!depositSessionId) {
+                return res.send(
+                    super.response(super._400, null, ['depositSessionId is required'])
+                );
+            }
+
+            // Import dependencies
+            const { DepositSessionRepository } = await import('../repositories/deposit-session.repo');
+            const { UserRepository } = await import('../repositories/user.repo');
+            const { SwapRepository } = await import('../repositories/swap.repo');
+            const { SWAP_EXECUTION_QUEUE } = await import('../configs/queue.config');
+            const { getCategoryAsset } = await import('../configs/tokens.config');
+            const { v4: uuidv4 } = await import('uuid');
+
+            const sessionRepo = new DepositSessionRepository();
+            const userRepo = new UserRepository();
+
+            // Get deposit session
+            const session = await sessionRepo.getById(depositSessionId);
+
+            if (!session) {
+                return res.send(
+                    super.response(super._404, null, ['Deposit session not found'])
+                );
+            }
+
+            if (session.userId !== userId) {
+                return res.send(
+                    super.response(super._403, null, ['Access denied'])
+                );
+            }
+
+            if (session.status !== 'CONFIRMED') {
+                return res.send(
+                    super.response(super._400, null, [
+                        `Deposit must be confirmed before conversion. Current status: ${session.status}`,
+                    ])
+                );
+            }
+
+            // Get user's target allocation
+            const user = await userRepo.getById(userId);
+
+            if (!user) {
+                return res.send(super.response(super._404, null, ['User not found']));
+            }
+
+            // Calculate swap amounts based on deposited USDC amount
+            const depositedAmount = session.matchedAmount || session.expectedAmount || 0;
+
+            if (depositedAmount <= 0) {
+                return res.send(
+                    super.response(super._400, null, ['Invalid deposit amount'])
+                );
+            }
+
+            // Calculate allocation amounts
+            const stableYieldsAmount =
+                (depositedAmount * (user.targetStableYieldsPercent || 80)) / 100;
+            const tokenizedStocksAmount =
+                (depositedAmount * (user.targetTokenizedStocksPercent || 15)) / 100;
+            const tokenizedGoldAmount =
+                (depositedAmount * (user.targetTokenizedGoldPercent || 5)) / 100;
+
+            // Create conversion group ID (links all swaps in same conversion)
+            const conversionGroupId = uuidv4();
+
+            // Create swap transactions for non-zero amounts
+            const swapRepo = new SwapRepository();
+            const createdSwaps = [];
+
+            // Swap USDC → USDM (stableYields)
+            if (stableYieldsAmount >= 1) {
+                const estimatedToAmount = stableYieldsAmount * 0.998; // Assume 0.2% slippage
+
+                const transaction = await swapRepo.createSwap({
+                    userId,
+                    fromAsset: 'USDC',
+                    toAsset: 'USDM',
+                    fromAmount: stableYieldsAmount,
+                    estimatedToAmount,
+                    slippage: 1.0,
+                    metadata: {
+                        conversionGroupId,
+                        depositSessionId,
+                        initiatedVia: 'deposit-conversion',
+                    },
+                    type: 'swap' as any,
+                });
+
+                await SWAP_EXECUTION_QUEUE.add(
+                    {
+                        transactionId: transaction.id,
+                        userId,
+                        fromAsset: 'USDC',
+                        toAsset: 'USDM',
+                        amount: stableYieldsAmount,
+                        slippage: 1.0,
+                    },
+                    {
+                        attempts: 3,
+                        backoff: { type: 'exponential', delay: 2000 },
+                        jobId: `swap-execute-${transaction.id}`,
+                        removeOnComplete: true,
+                        removeOnFail: false,
+                    }
+                );
+
+                createdSwaps.push({
+                    transactionId: transaction.id,
+                    toAsset: 'USDM',
+                    amount: stableYieldsAmount,
+                });
+            }
+
+            // Swap USDC → bCSPX (tokenizedStocks)
+            if (tokenizedStocksAmount >= 1) {
+                const estimatedToAmount = tokenizedStocksAmount * 0.998;
+
+                const transaction = await swapRepo.createSwap({
+                    userId,
+                    fromAsset: 'USDC',
+                    toAsset: 'BCSPX',
+                    fromAmount: tokenizedStocksAmount,
+                    estimatedToAmount,
+                    slippage: 1.0,
+                    metadata: {
+                        conversionGroupId,
+                        depositSessionId,
+                        initiatedVia: 'deposit-conversion',
+                    },
+                    type: 'swap' as any,
+                });
+
+                await SWAP_EXECUTION_QUEUE.add(
+                    {
+                        transactionId: transaction.id,
+                        userId,
+                        fromAsset: 'USDC',
+                        toAsset: 'BCSPX',
+                        amount: tokenizedStocksAmount,
+                        slippage: 1.0,
+                    },
+                    {
+                        attempts: 3,
+                        backoff: { type: 'exponential', delay: 2000 },
+                        jobId: `swap-execute-${transaction.id}`,
+                        removeOnComplete: true,
+                        removeOnFail: false,
+                    }
+                );
+
+                createdSwaps.push({
+                    transactionId: transaction.id,
+                    toAsset: 'BCSPX',
+                    amount: tokenizedStocksAmount,
+                });
+            }
+
+            // Swap USDC → PAXG (tokenizedGold)
+            if (tokenizedGoldAmount >= 1) {
+                const estimatedToAmount = tokenizedGoldAmount * 0.998;
+
+                const transaction = await swapRepo.createSwap({
+                    userId,
+                    fromAsset: 'USDC',
+                    toAsset: 'PAXG',
+                    fromAmount: tokenizedGoldAmount,
+                    estimatedToAmount,
+                    slippage: 1.0,
+                    metadata: {
+                        conversionGroupId,
+                        depositSessionId,
+                        initiatedVia: 'deposit-conversion',
+                    },
+                    type: 'swap' as any,
+                });
+
+                await SWAP_EXECUTION_QUEUE.add(
+                    {
+                        transactionId: transaction.id,
+                        userId,
+                        fromAsset: 'USDC',
+                        toAsset: 'PAXG',
+                        amount: tokenizedGoldAmount,
+                        slippage: 1.0,
+                    },
+                    {
+                        attempts: 3,
+                        backoff: { type: 'exponential', delay: 2000 },
+                        jobId: `swap-execute-${transaction.id}`,
+                        removeOnComplete: true,
+                        removeOnFail: false,
+                    }
+                );
+
+                createdSwaps.push({
+                    transactionId: transaction.id,
+                    toAsset: 'PAXG',
+                    amount: tokenizedGoldAmount,
+                });
+            }
+
+            // Return conversion plan
+            const conversionData = {
+                conversionGroupId,
+                depositSessionId,
+                depositedAmount,
+                status: 'pending',
+                swaps: createdSwaps,
+                swapCount: createdSwaps.length,
+                estimatedCompletionTime: '5-10 minutes',
+                allocation: {
+                    stableYields: user.targetStableYieldsPercent || 80,
+                    tokenizedStocks: user.targetTokenizedStocksPercent || 15,
+                    tokenizedGold: user.targetTokenizedGoldPercent || 5,
+                },
+            };
+
+            return res.send(super.response(super._201, conversionData));
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
+        }
+    }
+
+    /**
      * Generate mock checkout request ID
      * @returns string
      */

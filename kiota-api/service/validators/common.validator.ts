@@ -104,18 +104,14 @@ export type DateRangeInput = z.infer<typeof dateRangeSchema>;
 /**
  * Blockchain chain enum
  */
-export const chainSchema = z.enum(['base', 'ethereum', 'polygon', 'arbitrum', 'celo'], {
-  errorMap: () => ({ message: 'Invalid blockchain chain' }),
-});
+export const chainSchema = z.enum(['base', 'ethereum', 'polygon', 'arbitrum', 'celo']);
 
 export type Chain = z.infer<typeof chainSchema>;
 
 /**
  * Token symbol enum
  */
-export const tokenSymbolSchema = z.enum(['USDC', 'USDT', 'DAI', 'KES'], {
-  errorMap: () => ({ message: 'Invalid token symbol' }),
-});
+export const tokenSymbolSchema = z.enum(['USDC', 'USDT', 'DAI', 'KES']);
 
 export type TokenSymbol = z.infer<typeof tokenSymbolSchema>;
 
@@ -142,9 +138,7 @@ export type AllocationInput = z.infer<typeof allocationSchema>;
 /**
  * Transaction type enum
  */
-export const transactionTypeSchema = z.enum(['DEPOSIT', 'WITHDRAWAL', 'SWAP', 'REBALANCE'], {
-  errorMap: () => ({ message: 'Invalid transaction type' }),
-});
+export const transactionTypeSchema = z.enum(['DEPOSIT', 'WITHDRAWAL', 'SWAP', 'REBALANCE']);
 
 export type TransactionType = z.infer<typeof transactionTypeSchema>;
 
@@ -157,9 +151,7 @@ export const transactionStatusSchema = z.enum([
   'COMPLETED',
   'FAILED',
   'CANCELLED',
-], {
-  errorMap: () => ({ message: 'Invalid transaction status' }),
-});
+]);
 
 export type TransactionStatus = z.infer<typeof transactionStatusSchema>;
 
@@ -172,9 +164,7 @@ export const depositSessionStatusSchema = z.enum([
   'CONFIRMED',
   'EXPIRED',
   'FAILED',
-], {
-  errorMap: () => ({ message: 'Invalid deposit session status' }),
-});
+]);
 
 export type DepositSessionStatus = z.infer<typeof depositSessionStatusSchema>;
 
@@ -190,7 +180,7 @@ export function validate<T>(
     return { success: true, data: validated };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const errors = error.errors.map((err) => {
+      const errors = error.issues.map((err: z.ZodIssue) => {
         const path = err.path.join('.');
         return path ? `${path}: ${err.message}` : err.message;
       });
