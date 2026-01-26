@@ -90,10 +90,10 @@ export async function processSwapConfirmation(
       return; // Remove from queue
     }
 
-    // Step 3: Poll 1inch order status
-    contextLogger.info('Polling 1inch order status');
-    const orderStatus = await contextLogger.withTiming('Poll 1inch order status', async () => {
-      return await swapProvider.getOrderStatus(orderHash);
+    // Step 3: Poll order status
+    contextLogger.info('Polling order status');
+    const orderStatus = await contextLogger.withTiming('Poll order status', async () => {
+      return await swapProvider.getSwapStatus(orderHash);
     });
 
     contextLogger.info('Order status retrieved', {
@@ -108,9 +108,10 @@ export async function processSwapConfirmation(
       job.log('✅ Order filled! Updating balances...');
 
       // Calculate actual output amount
-      const actualToAmount = orderStatus.actualOutput
+      const actualToAmountStr = orderStatus.actualOutput
         ? orderStatus.actualOutput
         : transaction.destinationAmount;
+      const actualToAmount = Number(actualToAmountStr);
 
       contextLogger.info('Calculated actual output', {
         estimatedAmount: transaction.destinationAmount,
@@ -137,7 +138,7 @@ export async function processSwapConfirmation(
         await swapRepo.updateSwapStatus({
           orderHash,
           status: TransactionStatus.COMPLETED,
-          actualToAmount,
+          actualToAmount: actualToAmount,
           txHash: orderStatus.txHash,
         });
       });

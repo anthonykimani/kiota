@@ -29,12 +29,12 @@ export interface QuoteResult {
   toAmount: string;         // Estimated output amount in wei
   estimatedGas?: string;    // Estimated gas (Classic Swap only)
   priceImpact: number;      // Price impact in percent
-  route: string[];          // Swap routing path (DEX names or token symbols)
   fees?: {                  // Fee breakdown
     network: number;
     protocol: number;
   };
   expiresAt?: string;       // Quote expiration timestamp (ISO 8601)
+  raw?: Record<string, any>; // Provider-specific quote payload (full response)
 }
 
 /**
@@ -44,7 +44,8 @@ export interface SwapParams {
   fromToken: string;        // Token contract address (0x...)
   toToken: string;          // Token contract address (0x...)
   amount: string;           // Amount in wei
-  userAddress: string;      // User's wallet address (server wallet for backend)
+  userAddress: string;      // User's wallet address
+  privyWalletId: string;    // User's Privy wallet ID (for transaction signing)
   slippage?: number;        // Slippage tolerance in percent (default: 1)
 }
 

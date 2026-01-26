@@ -2,8 +2,8 @@
  * Swap Provider Factory
  *
  * Creates the appropriate swap provider based on network configuration:
- * - Base Sepolia (testnet) → ClassicSwapProvider
- * - Base Mainnet (production) → FusionSwapProvider
+ * - Ethereum Sepolia (testnet) → ClassicSwapProvider
+ * - Ethereum Mainnet (production) → FusionSwapProvider
  *
  * This allows seamless switching between implementations via environment variables
  * without changing any application code.
@@ -20,32 +20,24 @@ const logger = createLogger('swap-provider-factory');
  * Create swap provider based on network configuration
  *
  * Selection logic:
- * - If ONEINCH_NETWORK contains 'sepolia' or 'testnet' → Classic Swap
- * - Otherwise → Fusion SDK
+ * - Always uses Classic Swap when using Privy wallets
+ * - Fusion SDK requires EIP-712 signing which is not yet implemented in Privy integration
  *
  * @returns ISwapProvider implementation
  */
 export function createSwapProvider(): ISwapProvider {
-  const network = process.env.ONEINCH_NETWORK??"";
-  const isTestnet = network.includes('sepolia') || network.includes('testnet');
+  const network = process.env.ONEINCH_NETWORK || 'ethereum';
 
   let provider: ISwapProvider;
 
-  if (isTestnet) {
-    // Testnet: Use Classic Swap (user pays gas, but testnet works)
-    logger.info('Creating Classic Swap provider for testnet', {
-      network,
-      reason: 'Fusion does not support testnets'
-    });
-    provider = new ClassicSwapProvider();
-  } else {
-    // Mainnet: Use Fusion SDK (gasless swaps, MEV protection)
-    logger.info('Creating Fusion SDK provider for mainnet', {
-      network,
-      reason: 'Production deployment with gasless swaps'
-    });
-    provider = new FusionSwapProvider();
-  }
+  // NOTE: Always use Classic Swap with Privy wallets
+  // Fusion SDK requires EIP-712 typed data signing which needs
+  // additional Privy service integration
+  logger.info('Creating Classic Swap provider for Privy wallets', {
+    network,
+    reason: 'Privy embedded wallets use Classic Swap (Fusion requires EIP-712 signing support)'
+  });
+  provider = new ClassicSwapProvider();
 
   // Verify provider is configured
   if (!provider.isConfigured()) {

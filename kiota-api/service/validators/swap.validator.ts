@@ -12,22 +12,37 @@ import { positiveAmountSchema } from './common.validator';
  */
 export const swapAssetSchema = z.enum(['USDC', 'USDM', 'BCSPX', 'PAXG']);
 
+const tokenAddressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid token address');
+
 export type SwapAsset = z.infer<typeof swapAssetSchema>;
 
 /**
  * Get swap quote schema (query params)
  */
-export const getSwapQuoteSchema = z.object({
-  fromAsset: swapAssetSchema,
-  toAsset: swapAssetSchema,
-  amount: z
-    .string()
-    .transform((val) => Number(val))
-    .pipe(positiveAmountSchema.max(1000000, 'Amount cannot exceed $1,000,000')),
-}).refine((data) => data.fromAsset !== data.toAsset, {
-  message: 'Cannot swap same asset',
-  path: ['toAsset'],
-});
+export const getSwapQuoteSchema = z.union([
+  z.object({
+    fromAsset: swapAssetSchema,
+    toAsset: swapAssetSchema,
+    amount: z
+      .string()
+      .transform((val) => Number(val))
+      .pipe(positiveAmountSchema.max(1000000, 'Amount cannot exceed $1,000,000')),
+  }).refine((data) => data.fromAsset !== data.toAsset, {
+    message: 'Cannot swap same asset',
+    path: ['toAsset'],
+  }),
+  z.object({
+    fromToken: tokenAddressSchema,
+    toToken: tokenAddressSchema,
+    amount: z
+      .string()
+      .transform((val) => Number(val))
+      .pipe(positiveAmountSchema.max(1000000, 'Amount cannot exceed $1,000,000')),
+  }).refine((data) => data.fromToken.toLowerCase() !== data.toToken.toLowerCase(), {
+    message: 'Cannot swap same token',
+    path: ['toToken'],
+  }),
+]);
 
 export type GetSwapQuoteInput = z.infer<typeof getSwapQuoteSchema>;
 

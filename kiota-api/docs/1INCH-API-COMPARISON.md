@@ -4,7 +4,7 @@
 
 We have **TWO** 1inch API options for implementing swap functionality. This document compares both approaches to help you choose the best path forward.
 
-**CRITICAL FINDING**: 1inch Fusion **does NOT support testnets** (including Base Sepolia). This fundamentally impacts our testing strategy.
+**CRITICAL FINDING**: 1inch Fusion **does NOT support testnets** (including Ethereum Sepolia). This fundamentally impacts our testing strategy.
 
 ---
 
@@ -21,7 +21,7 @@ User → API Request → 1inch Classic Swap API → Transaction Data → User Br
 ### Key Characteristics
 
 **✅ Pros:**
-- ✅ **Testnet Support**: Works on Base Sepolia for testing
+- ✅ **Testnet Support**: Works on Ethereum Sepolia for testing
 - ✅ **Well-Documented REST API**: Clear endpoints and parameters
 - ✅ **Instant Execution**: No auction delay, immediate swaps
 - ✅ **Simple Integration**: Standard REST API with GET requests
@@ -141,10 +141,10 @@ User → Sign Order → 1inch Fusion → Auction → Resolver Fills → DEX (via
 - ✅ **Better Pricing**: Access to both DEX and CEX liquidity through professional market makers
 - ✅ **Official SDK Available**: `@1inch/fusion-sdk` with TypeScript support
 - ✅ **Server-Side Friendly**: Works with single wallet via PrivateKeyProviderConnector
-- ✅ **Base Mainnet Support**: Fully supported on Base (chain ID 8453)
+- ✅ **Ethereum Mainnet Support**: Fully supported on Ethereum (chain ID 1)
 
 **❌ Cons:**
-- ❌ **NO TESTNET SUPPORT**: Fusion is mainnet-only (no Base Sepolia)
+- ❌ **NO TESTNET SUPPORT**: Fusion is mainnet-only (no Ethereum Sepolia)
 - ❌ **Slower Execution**: Dutch auction takes time (not instant)
 - ❌ **More Complex**: Requires EIP-712 signing and order management
 - ❌ **SDK Dependency**: Must use official SDK or implement complex signing logic
@@ -187,7 +187,7 @@ const connector = new PrivateKeyProviderConnector(
 // 3. Initialize SDK
 const sdk = new FusionSDK({
   url: 'https://api.1inch.dev/fusion',
-  network: NetworkEnum.COINBASE, // Base = 8453
+  network: NetworkEnum.ETHEREUM, // Ethereum = 1
   blockchainProvider: connector,
   authKey: DEV_PORTAL_API_TOKEN
 })
@@ -237,7 +237,7 @@ while (true) {
 | **Gas Fees** | User pays | Free (resolver pays) |
 | **MEV Protection** | ❌ No | ✅ Yes |
 | **Speed** | Instant | 1-5 minutes (auction) |
-| **Testnet Support** | ✅ Base Sepolia | ❌ Mainnet only |
+| **Testnet Support** | ✅ Ethereum Sepolia | ❌ Mainnet only |
 | **Liquidity** | DEX only | DEX + CEX |
 | **Integration** | REST API | SDK required |
 | **Complexity** | Low | Medium |
@@ -252,7 +252,7 @@ while (true) {
 ## Recommendation Matrix
 
 ### Choose Classic Swap If:
-- ✅ You need testnet support (Base Sepolia)
+- ✅ You need testnet support (Ethereum Sepolia)
 - ✅ You want instant execution
 - ✅ You prefer simpler REST API integration
 - ✅ Gas costs are acceptable for your use case
@@ -268,8 +268,8 @@ while (true) {
 ### Hybrid Approach (Recommended):
 **Use Classic Swap for testnet development, migrate to Fusion for mainnet production**
 
-1. **Phase 1 (Testing)**: Implement Classic Swap API for Base Sepolia
-2. **Phase 2 (Production)**: Switch to Fusion SDK for Base mainnet
+1. **Phase 1 (Testing)**: Implement Classic Swap API for Ethereum Sepolia
+2. **Phase 2 (Production)**: Switch to Fusion SDK for Ethereum mainnet
 3. **Architecture**: Design abstraction layer that supports both implementations
 
 ---
@@ -278,15 +278,15 @@ while (true) {
 
 ### Classic Swap Strategy
 ```
-Development → Base Sepolia (Classic) → Base Mainnet (Classic or Fusion)
+Development → Ethereum Sepolia (Classic) → Ethereum Mainnet (Classic or Fusion)
 ```
-- ✅ Can test on Base Sepolia with testnet tokens
+- ✅ Can test on Ethereum Sepolia with testnet tokens
 - ✅ Full end-to-end testing possible before mainnet
 - ❌ Different API in production if switching to Fusion
 
 ### Fusion-Only Strategy
 ```
-Development → Base Mainnet (small amounts) → Base Mainnet (production)
+Development → Ethereum Mainnet (small amounts) → Ethereum Mainnet (production)
 ```
 - ❌ No testnet testing available
 - ❌ Must test on mainnet with real funds
@@ -295,7 +295,7 @@ Development → Base Mainnet (small amounts) → Base Mainnet (production)
 
 ### Hybrid Strategy (Recommended)
 ```
-Development → Base Sepolia (Classic) → Base Mainnet (Fusion)
+Development → Ethereum Sepolia (Classic) → Ethereum Mainnet (Fusion)
 ```
 - ✅ Safe testnet testing with Classic Swap
 - ✅ Best production experience with Fusion
@@ -330,7 +330,7 @@ Development → Base Sepolia (Classic) → Base Mainnet (Fusion)
 
 ### Path A: Classic Swap (Testnet-Friendly)
 - Refactor to use Classic Swap API v6.1
-- Full testnet support on Base Sepolia
+- Full testnet support on Ethereum Sepolia
 - User pays gas fees
 - Instant swaps
 

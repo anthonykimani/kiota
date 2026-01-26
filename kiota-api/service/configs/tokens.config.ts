@@ -1,7 +1,7 @@
 /**
  * Token Configuration
  *
- * Token addresses for supported networks (Base and Base Sepolia)
+ * Token addresses for supported networks (Ethereum Mainnet and Sepolia)
  *
  * Asset Types:
  * - USDC: Circle USD Coin (deposit currency)
@@ -24,45 +24,34 @@ export interface TokenInfo {
  */
 export const TOKEN_ADDRESSES: Record<string, Record<AssetType, string>> = {
   /**
-   * Base Mainnet (Chain ID: 8453)
+   * Ethereum Mainnet (Chain ID: 1)
    */
-  'base': {
-    USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // Circle USDC on Base
+  'ethereum': {
+    USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // Circle USDC on Ethereum
     USDM: '0x59D9356E565Ab3A36dD77763Fc0d87fEaf85508C', // Mountain Protocol USDM
     BCSPX: '0x4d49fcf93f415AdF54E9a62ab6e224f6d308D026', // Backed CSP Index Token
-    PAXG: '0x6e53131F68a034873b6bFA15502aF094Ef0c5854', // Paxos Gold
+    PAXG: '0x45804880De22913dAFE09f4980848ECE6EcbAf78', // Paxos Gold
   },
 
   /**
-   * Base Sepolia Testnet (Chain ID: 84532)
+   * Ethereum Sepolia Testnet (Chain ID: 11155111)
    */
-  'base-sepolia': {
-    USDC: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', // Circle USDC on Base Sepolia
+  'ethereum-sepolia': {
+    USDC: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // Circle USDC on Sepolia
     USDM: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
     BCSPX: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
     PAXG: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
   },
 
-
   /**
-   * Ethereum Sepolia Testnet (Chain ID: )
+   * Alias: 'sepolia' maps to 'ethereum-sepolia'
    */
-  'ethereum-sepolia': {
-    USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // Circle USDC on Base Sepolia
-    USDM: '',
-    BCSPX: '',
-    PAXG: '0x45804880De22913dAFE09f4980848ECE6EcbAf78', 
+  'sepolia': {
+    USDC: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // Circle USDC on Sepolia
+    USDM: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
+    BCSPX: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
+    PAXG: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
   },
-
-    /**
-   * Ethereum Sepolia Testnet (Chain ID: )
-   */
-  'ethereum': {
-    USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // Circle USDC on Base Sepolia
-    USDM: '',
-    BCSPX: '',
-    PAXG: '0x45804880De22913dAFE09f4980848ECE6EcbAf78', 
-  }
 };
 
 /**

@@ -103,7 +103,7 @@ export async function processSwapExecution(
       return;
     }
 
-    // Step 3: Get user's wallet address
+    // Step 3: Get user's wallet address and Privy wallet ID
     logger.info('Fetching user wallet');
     const wallet = await walletRepo.getByUserId(userId);
 
@@ -112,63 +112,74 @@ export async function processSwapExecution(
       throw new Error(`Wallet not found for user ${userId}`);
     }
 
+    if (!wallet.privyUserId) {
+      logger.error('Privy wallet ID not found', undefined, { userId, walletId: wallet.id });
+      throw new Error(`Privy wallet ID not found for user ${userId}`);
+    }
+
     logger.info('Wallet retrieved', {
       walletAddress: wallet.address.substring(0, 10) + '...',
+      privyWalletId: wallet.privyUserId,
     });
-    job.log(`User wallet: ${wallet.address.substring(0, 10)}...`);
+    job.log(`User wallet: ${wallet.address.substring(0, 10)}... (Privy: ${wallet.privyUserId})`);
 
     // Step 4: Get token addresses
-    const fromTokenAddress = getTokenAddress(fromAsset, "ethereum-sepolia");
-    const toTokenAddress = getTokenAddress(toAsset);
+    const network = process.env.ONEINCH_NETWORK || 'ethereum';
+    const fromTokenAddress = getTokenAddress(fromAsset, network);
+    const toTokenAddress = getTokenAddress(toAsset, network);
     const amountWei = toWei(amount, fromAsset);
 
-    logger.info('Placing swap order with 1inch Fusion', {
+    logger.info('Executing swap via swap provider', {
       fromToken: fromTokenAddress.substring(0, 10) + '...',
       toToken: toTokenAddress.substring(0, 10) + '...',
       amountWei,
       userAddress: wallet.address.substring(0, 10) + '...',
+      provider: swapProvider.getProviderName(),
     });
-    job.log('Placing order with 1inch Fusion (will retry with higher slippage if needed)');
+    job.log('Executing swap via swap provider');
 
-    // Step 5: Place order with retry (1%, 2%, 3% slippage)
-    const order = await logger.withTiming('Place 1inch order with retry', async () => {
-      return await swapProvider.placeOrderWithRetry({
+    // Step 5: Execute swap via provider with Privy wallet
+    const swapResult = await logger.withTiming('Execute swap', async () => {
+      return await swapProvider.executeSwap({
         fromToken: fromTokenAddress,
         toToken: toTokenAddress,
         amount: amountWei,
         userAddress: wallet.address,
+        privyWalletId: wallet.privyUserId,
       });
     });
 
-    logger.info('Order placed successfully', {
-      orderHash: order.orderHash,
-      status: order.status,
+    logger.info('Swap executed successfully', {
+      orderId: swapResult.orderId,
+      provider: swapResult.provider,
+      status: swapResult.status,
     });
-    job.log(`✅ Order placed: ${order.orderHash}`);
+    job.log(`✅ Swap executed: ${swapResult.orderId.substring(0, 10)}... (${swapResult.provider})`);
 
-    // Step 6: Save order hash to transaction metadata
-    logger.info('Saving order hash to transaction metadata');
+    // Step 6: Save order ID to transaction metadata
+    logger.info('Saving order ID to transaction metadata');
     await swapRepo.updateSwapMetadata(transactionId, {
-      orderHash: order.orderHash,
-      orderStatus: order.status,
+      orderHash: swapResult.orderId,
+      provider: swapResult.provider,
+      orderStatus: swapResult.status,
       orderPlacedAt: new Date().toISOString(),
     });
 
     // Mark transaction as PROCESSING
     await swapRepo.updateSwapStatus({
-      orderHash: order.orderHash,
+      orderHash: swapResult.orderId,
       status: TransactionStatus.PROCESSING,
     });
 
     logger.info('Transaction marked as PROCESSING');
     job.log('Transaction status updated to PROCESSING');
 
-    // Step 7: Queue confirmation job (polls 1inch order status)
+    // Step 7: Queue confirmation job (polls order status)
     logger.info('Queueing swap confirmation job');
     await SWAP_CONFIRMATION_QUEUE.add(
       {
         transactionId,
-        orderHash: order.orderHash,
+        orderHash: swapResult.orderId,
       },
       {
         repeat: {
@@ -187,14 +198,15 @@ export async function processSwapExecution(
     );
 
     logger.info('Swap confirmation job queued', {
-      orderHash: order.orderHash,
+      orderId: swapResult.orderId,
       jobId: `swap-confirm-${transactionId}`,
     });
     job.log('Queued confirmation job to poll order status');
 
     logger.info('Swap execution complete', {
       transactionId,
-      orderHash: order.orderHash,
+      orderId: swapResult.orderId,
+      provider: swapResult.provider,
     });
     job.log(`✅ Swap execution complete. Confirmation job will poll order status.`);
   } catch (error) {
