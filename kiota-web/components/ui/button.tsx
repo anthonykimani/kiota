@@ -21,6 +21,7 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       buttonColor: {
+        primary: "bg-gradient-to-r from-[#53389E] to-[#7F56D9]",
         secondary: "bg-white text-black"
       },
       size: {
