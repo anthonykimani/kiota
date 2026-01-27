@@ -36,27 +36,42 @@ const buttonVariants = cva(
   }
 )
 
-function Button({
-  className,
-  variant = "default",
-  size = "default",
-  asChild = false,
-  ...props
-}: React.ComponentProps<"button"> &
-  VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
-  }) {
-  const Comp = asChild ? Slot : "button"
-
-  return (
-    <Comp
-      data-slot="button"
-      data-variant={variant}
-      data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
-  )
+interface ButtonProps extends React.ComponentProps<"button">, VariantProps<typeof buttonVariants> {
+  asChild?: boolean
+  leftIcon?: React.ReactNode
 }
+
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({
+    className,
+    variant = "default",
+    size = "default",
+    leftIcon,
+    asChild = false,
+    ...props
+  }, ref) => {
+    const Comp = asChild ? Slot : "button"
+    const hasLeftIcon = !!leftIcon
+
+    return (
+      <div className="relative inline-block">
+        {leftIcon && (
+          <div className="absolute left-4 top-1/2 -translate-y-[65%] text-slate-900 pointer-events-none z-10">
+            {leftIcon}
+          </div>
+        )}
+        <Comp
+          data-slot="button"
+          data-variant={variant}
+          data-size={size}
+          className={cn(buttonVariants({ variant, size, className }),
+            hasLeftIcon && "pl-14"
+          )}
+          {...props}
+        />
+      </div>
+    )
+  }
+)
 
 export { Button, buttonVariants }
