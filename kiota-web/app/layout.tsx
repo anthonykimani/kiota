@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, DM_Mono } from "next/font/google";
 import "./globals.css";
 import PrivyProviders from "@/provider";
 
@@ -12,6 +12,12 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+
+const dm_Mono = DM_Mono({
+  variable: "--font-dm-mono",
+  subsets: ['latin'],
+  weight: "400"
+})
 
 export const metadata: Metadata = {
   title: "Kiota",
@@ -26,7 +32,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${dm_Mono.variable} antialiased`}
       >
         <PrivyProviders>
           {children}
