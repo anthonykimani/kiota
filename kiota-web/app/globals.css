@@ -3,7 +3,7 @@
 @import "tw-animate-css";
 
 *{
-  border: 1px solid red;
+  /* border: 1px solid red; */
 }
 
 @custom-variant dark (&:is(.dark *));
