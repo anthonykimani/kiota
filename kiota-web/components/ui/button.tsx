@@ -61,7 +61,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <div className="relative inline-block">
         {leftIcon && (
-          <div className="absolute left-4 top-3/5 -translate-y-[65%] text-slate-900 pointer-events-none z-10">
+          <div className="absolute left-10 top-3/5 -translate-y-[65%] text-slate-900 pointer-events-none z-10">
             {leftIcon}
           </div>
         )}
