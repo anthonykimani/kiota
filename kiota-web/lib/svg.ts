@@ -1,1 +1,4 @@
 export const onboardingScreenOne = "/svg/onboarding-screen-one.svg"
+export const ShieldSvg = "/svg/shield.svg"
+export const DataSvg = "/svg/data.svg"
+export const CrownSvg = "/svg/crown.svg"
