@@ -9,9 +9,10 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
+import { assetClassConfig, type AssetClass } from "@/lib/constants"
 
 export interface PortfolioItem {
-  assetClass: "preservation" | "growth" | "hedge"
+  assetClass: AssetClass
   value: number
   color: string
   asset: string
@@ -26,31 +27,25 @@ const defaultPortfolioData: PortfolioItem[] = [
   {
     assetClass: "preservation",
     value: 40,
-    color: "🛡️",
+    color: assetClassConfig.preservation.color,
     asset: "USDM",
     description: "Dollar-backed | 5% yield | Low risk",
   },
   {
     assetClass: "growth",
     value: 35,
-    color: "📈",
+    color: assetClassConfig.growth.color,
     asset: "bCSPX",
     description: "S&P 500 | ~10% avg return | Med risk",
   },
   {
     assetClass: "hedge",
     value: 25,
-    color: "🥇",
+    color: assetClassConfig.hedge.color,
     asset: "PAXG",
     description: "Gold-backed | Inflation hedge | Stable",
   },
 ]
-
-const assetClassConfig = {
-  preservation: { label: "Preservation", color: "hsl(142, 76%, 36%)" },
-  growth: { label: "Growth", color: "hsl(221, 83%, 53%)" },
-  hedge: { label: "Hedge", color: "hsl(45, 93%, 47%)" },
-} as const
 
 export function ChartPieDonutText({
   data = defaultPortfolioData,
@@ -60,7 +55,7 @@ export function ChartPieDonutText({
       data.map((item) => ({
         name: assetClassConfig[item.assetClass].label,
         value: item.value,
-        fill: assetClassConfig[item.assetClass].color,
+        fill: item.color || assetClassConfig[item.assetClass].color,
       })),
     [data]
   )
@@ -74,7 +69,7 @@ export function ChartPieDonutText({
     data.forEach((item) => {
       config[item.assetClass] = {
         label: assetClassConfig[item.assetClass].label,
-        color: assetClassConfig[item.assetClass].color,
+        color: item.color || assetClassConfig[item.assetClass].color,
       }
     })
     return config

@@ -16,7 +16,7 @@ function PrivyTokenTester() {
   const [idToken, setIdToken] = useState('');
   const [accessToken, setAccessToken] = useState('');
   const [loading, setLoading] = useState(false);
-  const [syncResponse, setSyncResponse] = useState(null);
+  const [syncResponse, setSyncResponse] = useState<Record<string, unknown> | null>(null);
   const [apiUrl, setApiUrl] = useState('http://localhost:3000');
   const { identityToken } = useIdentityToken();
 
@@ -40,11 +40,11 @@ function PrivyTokenTester() {
     setLoading(false);
   };
 
-  const copyToClipboard = (text, label) => {
+  const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text).then(() => {
-      alert(`✅ ${label} copied to clipboard!`);
-    }).catch(err => {
-      alert('❌ Failed to copy: ' + err);
+      alert(`${label} copied to clipboard!`);
+    }).catch((err: Error) => {
+      alert('Failed to copy: ' + err.message);
     });
   };
 
@@ -75,7 +75,7 @@ function PrivyTokenTester() {
     } catch (error) {
       console.error('Sync error:', error);
       alert('❌ Sync failed: ' + error);
-      setSyncResponse({ error });
+      setSyncResponse({ error: String(error) });
     }
     setLoading(false);
   };
@@ -106,7 +106,7 @@ function PrivyTokenTester() {
     } catch (error) {
       console.error('Verify error:', error);
       alert('❌ Verify failed: ' + error);
-      setSyncResponse(error);
+      setSyncResponse({ error: String(error) });
     }
     setLoading(false);
   };
@@ -200,7 +200,7 @@ function PrivyTokenTester() {
               <span className="mono">{user.wallet.address}</span>
               <button
                 className="btn btn-sm btn-copy"
-                onClick={() => copyToClipboard(user.wallet?.address, 'Wallet Address')}
+                onClick={() => copyToClipboard(user.wallet?.address || '', 'Wallet Address')}
               >
                 📋 Copy
               </button>
