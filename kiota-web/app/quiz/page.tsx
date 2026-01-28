@@ -1,13 +1,17 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { CaretLeftIcon } from "@phosphor-icons/react"
 
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
+import { QuizOption } from "@/components/ui/quiz-option"
+import { ScreenWrapper } from "@/components/custom/screen-wrapper"
 import { investmentToleranceQuiz } from "@/lib/quiz"
 
-const QuizPage = () => {
+export default function QuizPage() {
+  const router = useRouter()
   const [stepIndex, setStepIndex] = React.useState(0)
   const [answers, setAnswers] = React.useState<Record<string, string[]>>(() =>
     investmentToleranceQuiz.reduce<Record<string, string[]>>((acc, question) => {
@@ -23,6 +27,7 @@ const QuizPage = () => {
   const selectedValues = answers[currentStep.id] ?? []
   const isAnswered = selectedValues.length > 0
   const isMulti = Boolean(currentStep.multi)
+  const isLastStep = stepIndex === totalSteps - 1
 
   const toggleValue = (value: string) => {
     setAnswers((prev) => {
@@ -40,120 +45,78 @@ const QuizPage = () => {
     })
   }
 
-  const goBack = () => {
-    setStepIndex((prev) => Math.max(prev - 1, 0))
-  }
-
-  const goNext = () => {
-    setStepIndex((prev) => Math.min(prev + 1, totalSteps - 1))
-  }
+  const goBack = () => setStepIndex((prev) => Math.max(prev - 1, 0))
+  const goNext = () => setStepIndex((prev) => Math.min(prev + 1, totalSteps - 1))
+  const skipToEnd = () => setStepIndex(totalSteps - 1)
 
   const handleSubmit = () => {
-    console.log("quiz:submit", answers)
+    localStorage.setItem("quiz-answers", JSON.stringify(answers))
+    router.push("/result")
   }
 
   return (
-    <div className="flex flex-col justify-around h-screen kiota-background w-screen bg-no-repeat bg-cover bg-right p-2 font-dm text-white">
-      <div className="flex items-center justify-around">
+    <ScreenWrapper spaced>
+      {/* Header with navigation */}
+      <div className="flex items-center justify-between">
         <button
           type="button"
           onClick={goBack}
-          className="disabled:opacity-40"
+          className="disabled:opacity-40 p-2"
           disabled={stepIndex === 0}
+          aria-label="Go back"
         >
-          <CaretLeftIcon size={32} />
+          <CaretLeftIcon size={24} />
         </button>
-        <Progress value={progressValue} />
+        <Progress value={progressValue} className="w-48" />
         <button
           type="button"
-          className="text-white"
-          onClick={() => setStepIndex(totalSteps - 1)}
+          className="text-kiota-text-secondary text-sm p-2"
+          onClick={skipToEnd}
         >
           Skip
         </button>
       </div>
 
+      {/* Question */}
       <div className="space-y-3">
-        <h3 className="text-2xl font-semibold">{currentStep.title}</h3>
-        <h4 className="text-xl text-[#858699]">{currentStep.prompt}</h4>
+        <h1 className="text-2xl font-semibold">{currentStep.title}</h1>
+        <p className="text-xl text-kiota-text-secondary">{currentStep.prompt}</p>
       </div>
 
+      {/* Options */}
       <div className="space-y-4">
         <div
           className="space-y-3"
           role={isMulti ? "group" : "radiogroup"}
           aria-label={currentStep.prompt}
         >
-          {currentStep.options.map((option) => {
-            const isSelected = selectedValues.includes(option.value)
-
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role={!isMulti ? "radio" : undefined}
-                aria-checked={!isMulti ? isSelected : undefined}
-                aria-pressed={isMulti ? isSelected : undefined}
-                onClick={() => toggleValue(option.value)}
-                className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition cursor-pointer ${
-                  isSelected
-                    ? "border-white/80 bg-white/10"
-                    : "border-white/10 bg-[#101017]"
-                }`}
-              >
-                <span
-                  aria-hidden="true"
-                  className={`flex size-4 items-center justify-center rounded-full border transition ${
-                    isSelected
-                      ? "border-[#7A5AF8] bg-[#7A5AF8]"
-                      : "border-white/30"
-                  }`}
-                >
-                  <span
-                    className={`block size-2 rounded-full bg-white transition ${
-                      isSelected ? "opacity-100" : "opacity-0"
-                    }`}
-                  />
-                </span>
-                <div className="space-y-1">
-                  <span className="text-white">{option.label}</span>
-                  {option.helper && (
-                    <p className="text-xs text-[#858699]">{option.helper}</p>
-                  )}
-                </div>
-              </button>
-            )
-          })}
+          {currentStep.options.map((option) => (
+            <QuizOption
+              key={option.value}
+              label={option.label}
+              helper={option.helper}
+              isSelected={selectedValues.includes(option.value)}
+              isMulti={isMulti}
+              onClick={() => toggleValue(option.value)}
+            />
+          ))}
         </div>
 
-        <div className="flex items-center gap-3">
-          {stepIndex < totalSteps - 1 ? (
-            <Button
-              type="button"
-              buttonColor="primary"
-              className="w-full"
-              onClick={goNext}
-              disabled={!isAnswered}
-            >
-              {isMulti
-                ? "Pick at least 1 option to continue"
-                : "Pick 1 option to continue"}
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              buttonColor="primary"
-              className="w-full"
-              disabled={!isAnswered}
-              onClick={handleSubmit}
-            >
-              Finish quiz
-            </Button>
-          )}
-        </div>
+        {/* Action button */}
+        <Button
+          type="button"
+          buttonColor="primary"
+          className="w-full"
+          onClick={isLastStep ? handleSubmit : goNext}
+          disabled={!isAnswered}
+        >
+          {isLastStep
+            ? "Finish quiz"
+            : isMulti
+              ? "Pick at least 1 option to continue"
+              : "Pick 1 option to continue"}
+        </Button>
       </div>
-    </div>
+    </ScreenWrapper>
   )
 }
-
-export default QuizPage
