@@ -119,6 +119,10 @@ export async function processSwapConfirmation(
 
       // ATOMIC BALANCE UPDATE
       contextLogger.info('Performing atomic balance update');
+      if (!transaction.sourceAsset || !transaction.destinationAsset) {
+        throw new Error('Swap transaction missing source or destination asset');
+      }
+
       await contextLogger.withTiming('Update balances atomically', async () => {
         await balanceUpdaterService.updateAfterSwap({
           userId: transaction.userId,
