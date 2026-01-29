@@ -1,6 +1,7 @@
 import { ChartAreaLinear } from '@/components/custom/chart-area-linear'
 import { ScreenWrapper } from '@/components/custom/screen-wrapper'
 import { ActionCard } from '@/components/ui/action-card'
+import { BottomNav } from '@/components/ui/bottom-nav'
 import { CryptoTradingBot, EyeClosed, HedgeFund } from '@/lib/svg'
 import Image from 'next/image'
 import React from 'react'
@@ -8,7 +9,7 @@ import React from 'react'
 const HomePage = () => {
     return (
         <div>
-            <ScreenWrapper className="py-6 gap-y-6">
+            <ScreenWrapper className="py-6 gap-y-6 pb-24">
                 <div className='flex justify-between items-center'>
                     <div className="space-y-1">
                         <p className="text-sm text-kiota-text-secondary">Your Total Asset</p>
@@ -48,6 +49,7 @@ const HomePage = () => {
                     />
                 </div>
             </ScreenWrapper>
+            <BottomNav />
         </div>
     )
 }
