@@ -9,7 +9,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
-import { LearningTrack } from './learningTrack.entity';
+import { LearningTrack } from './learning-track.entity';
 import { Lesson } from './lesson.entity';
 
 @Entity('learning_modules')

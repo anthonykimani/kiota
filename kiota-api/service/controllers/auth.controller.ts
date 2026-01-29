@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { UserRepository } from '../repositories/user.repo';
 import Controller from './controller';
+import { generateToken } from '../middleware/auth';
+import { AuthenticatedRequest } from '../interfaces/IAuth';
 
 /**
  * Auth Controller
@@ -43,9 +45,9 @@ class AuthController extends Controller {
                 user.googleId = googleId;
                 user.email = email;
                 user.lastLoginAt = new Date();
-                // Note: Need to add save method to UserRepository
+                await userRepo.save(user);
 
-                const token = AuthController.generateToken(user.id);
+                const token = generateToken(user.id);
 
                 return res.send(
                     super.response(
@@ -84,7 +86,7 @@ class AuthController extends Controller {
                 googleId
             });
 
-            const token = AuthController.generateToken(user.id);
+            const token = generateToken(user.id);
 
             return res.send(
                 super.response(
@@ -116,7 +118,7 @@ class AuthController extends Controller {
     public static async getCurrentUser(req: Request, res: Response) {
         try {
             const userRepo: UserRepository = new UserRepository();
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
 
             if (!userId) {
                 return res.send(
@@ -162,18 +164,6 @@ class AuthController extends Controller {
         } catch (error) {
             return res.send(super.response(super._500, null, super.ex(error)));
         }
-    }
-
-    /**
-     * Generate session token
-     * @param userId User ID
-     * @returns Token string
-     */
-    private static generateToken(userId: string): string {
-        return Buffer.from(JSON.stringify({ 
-            userId, 
-            exp: Date.now() + (7 * 24 * 60 * 60 * 1000)
-        })).toString('base64');
     }
 }
 

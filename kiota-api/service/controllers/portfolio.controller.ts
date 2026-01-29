@@ -6,6 +6,7 @@ import { UserRepository } from '../repositories/user.repo';
 import { WalletRepository } from '../repositories/wallet.repo';
 import { AssetSymbol } from '../enums/MarketData';
 import Controller from './controller';
+import { AuthenticatedRequest } from '../interfaces/IAuth';
 
 /**
  * Portfolio Controller
@@ -26,7 +27,7 @@ class PortfolioController extends Controller {
             const marketDataRepo: MarketDataRepository = new MarketDataRepository();
             const userRepo: UserRepository = new UserRepository();
             
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
 
             if (!userId) {
                 return res.send(
@@ -174,7 +175,7 @@ class PortfolioController extends Controller {
             const portfolioRepo: PortfolioRepository = new PortfolioRepository();
             const transactionRepo: TransactionRepository = new TransactionRepository();
             
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
             const { symbol } = req.params;
 
             if (!userId) {
@@ -307,7 +308,7 @@ class PortfolioController extends Controller {
             const userRepo: UserRepository = new UserRepository();
             const walletRepo = new WalletRepository();
 
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
             const { force = false } = req.body || {};
 
             if (!userId) {

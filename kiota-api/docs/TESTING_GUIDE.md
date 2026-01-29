@@ -1,17 +1,17 @@
-# Swap API Testing Guide
+# Kiota API Testing Guide
 
-Complete guide for testing the hybrid 1inch swap integration on Ethereum mainnet and Ethereum Sepolia testnet.
+Complete guide for testing the Kiota API.
 
 ---
 
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [Environment Setup](#environment-setup)
-3. [Starting the Services](#starting-the-services)
-4. [Authentication](#authentication)
-5. [Testing Endpoints](#testing-endpoints)
-6. [Monitoring Results](#monitoring-results)
+2. [Setup](#setup)
+3. [Running Tests](#running-tests)
+4. [Manual API Testing](#manual-api-testing)
+5. [Testing Deposits](#testing-deposits)
+6. [Testing Swaps](#testing-swaps)
 7. [Troubleshooting](#troubleshooting)
 
 ---
@@ -19,273 +19,252 @@ Complete guide for testing the hybrid 1inch swap integration on Ethereum mainnet
 ## Prerequisites
 
 ### Required Software
-- Node.js v18+ installed
-- PostgreSQL running locally
-- Redis running locally
-- An Ethereum wallet with private key
+- Node.js v18+
+- PostgreSQL 14+ running locally
+- Redis 6+ running locally
 
-### Required Accounts
-- **1inch Developer Portal**: Get API key from https://portal.1inch.dev
-- **Ethereum Sepolia Faucet**: Get test ETH from https://sepoliafaucet.com
-- **Ethereum Sepolia USDC**: Get testnet USDC from Circle faucet
+### Required Accounts (for full testing)
+- **1inch**: API key from https://portal.1inch.dev
+- **Privy**: App credentials from https://console.privy.io
+- **OpenAI**: API key from https://platform.openai.com
 
-### Wallet Funding
-
-**For Testnet (Ethereum Sepolia):**
-```
-1. Get test ETH from faucet (needed for gas fees)
-2. Get test USDC from Circle testnet faucet
-   USDC Address: 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
-```
-
-**For Mainnet (Ethereum):**
-```
-1. Fund wallet with small amount of USDC for testing
-2. NO ETH needed (Fusion is gasless)
-```
+### Testnet Funds (for blockchain testing)
+- Base Sepolia ETH from faucet
+- Base Sepolia USDC from Circle testnet faucet
 
 ---
 
-## Environment Setup
+## Setup
 
-### 1. Configure Environment Variables
-
-The app is already configured in `.env.development`. Ensure these are set:
+### 1. Create Test Database
 
 ```bash
-# Blockchain Network (choose one)
-ONEINCH_NETWORK="ethereum-sepolia"    # For testnet
-# ONEINCH_NETWORK="ethereum"          # For mainnet
+# Connect to PostgreSQL
+psql -U postgres
 
-# 1inch API Configuration
-ONEINCH_API_KEY="your_1inch_api_key_here"
+# Create databases
+CREATE DATABASE kiota_postgres;
+CREATE DATABASE kiota_test;
 
-# Server Wallet (signs transactions)
-SWAP_WALLET_PRIVATE_KEY="0x..."       # Your wallet private key
-
-# RPC Endpoints (optional, defaults are provided)
-NODE_URL="https://ethereum-sepolia-rpc.publicnode.com"  # Testnet
-# NODE_URL="https://eth.llamarpc.com"                   # Mainnet
-
-# Application
-PORT=3003
+# Exit
+\q
 ```
 
-### 2. Update .env.development
-
-Edit `/home/priest/kiota/kiota-api/.env.development`:
+### 2. Configure Environment
 
 ```bash
-# Add these lines (or update if they exist)
-SWAP_WALLET_PRIVATE_KEY="0xYOUR_PRIVATE_KEY_HERE"
-NODE_URL="https://ethereum-sepolia-rpc.publicnode.com"
+# Copy environment template
+cp .env.example .env.development
+cp .env.example .env.test
+
+# Edit .env.development with your credentials
 ```
 
-**⚠️ Security Warning**: Never commit private keys to git. Add `.env.development` to `.gitignore`.
-
-### 3. Check Token Configuration
-
-The supported assets are:
-- **USDC**: Deposit currency (available on testnet)
-- **USDM**: Mountain Protocol USD (mainnet only for now)
-- **BCSPX**: Backed CSP Index (mainnet only for now)
-- **PAXG**: Paxos Gold (mainnet only for now)
-
-For testnet testing, only USDC swaps to other testnet-deployed tokens will work. You may need to deploy test versions of USDM, BCSPX, PAXG on Sepolia.
-
----
-
-## Starting the Services
-
-### 1. Install Dependencies
+### 3. Install Dependencies
 
 ```bash
-cd /home/priest/kiota/kiota-api
 npm install
 ```
 
-### 2. Start Database
+### 4. Start Services
 
-Ensure PostgreSQL is running:
 ```bash
-# Check if running
-psql -h localhost -U postgres -d kiota_postgres -c "SELECT 1;"
-```
+# Terminal 1: Start API server
+npm run dev
 
-### 3. Start Redis
-
-Ensure Redis is running:
-```bash
-# Check if running
-redis-cli ping
-# Should return: PONG
-```
-
-If not running:
-```bash
-redis-server &
-```
-
-### 4. Start Worker Process
-
-In terminal 1:
-```bash
+# Terminal 2: Start background worker
 npm run worker
 ```
 
-Expected output:
-```
-[INFO] Creating [Classic Swap|Fusion SDK] provider for [testnet|mainnet]
-[INFO] Swap provider initialized successfully
-[INFO] Worker listening for jobs...
-```
-
-### 5. Start API Server
-
-In terminal 2:
-```bash
-npm run dev
-```
-
-Expected output:
-```
-[INFO] Server running on http://localhost:3003
-```
-
-### 6. Verify Bull Board
-
-Open browser to: http://localhost:3003/admin/queues
-
-You should see:
-- Swap Execution queue
-- Swap Confirmation queue
-
----
-
-## Authentication
-
-All swap endpoints require authentication via Bearer token.
-
-### Generate Test Token
-
-Create a token with this format:
-
-```javascript
-// Node.js
-const payload = {
-  userId: "test-user-123",
-  iat: Date.now(),
-  exp: Date.now() + 3600000  // Expires in 1 hour
-};
-
-const token = Buffer.from(JSON.stringify(payload)).toString('base64');
-console.log('Bearer', token);
-```
-
-**Example Token:**
-```bash
-Bearer eyJ1c2VySWQiOiJ0ZXN0LXVzZXItMTIzIiwiaWF0IjoxNzM3NjU1MjAwMDAwLCJleHAiOjE3Mzc2NTg4MDAwMDB9
-```
-
-### Save Token for Reuse
+### 5. Verify Setup
 
 ```bash
-export AUTH_TOKEN="Bearer eyJ1c2VySWQiOiJ0ZXN0LXVzZXItMTIzIiwiaWF0IjoxNzM3NjU1MjAwMDAwLCJleHAiOjE3Mzc2NTg4MDAwMDB9"
+# Health check
+curl http://localhost:3003/health
+
+# Expected: {"status":"ok",...}
 ```
 
 ---
 
-## Testing Endpoints
+## Running Tests
 
-### Base URL
+### Run All Tests
+
+```bash
+npm test
 ```
-http://localhost:3003/api/swap
+
+### Run with Coverage
+
+```bash
+npm run test:coverage
+```
+
+### Run in Watch Mode
+
+```bash
+npm run test:watch
+```
+
+### Run Specific Tests
+
+```bash
+# Unit tests only
+npm run test:unit
+
+# Integration tests only
+npm run test:integration
+
+# Specific file
+npm test -- deposit-session.repo.test.ts
+
+# Specific test name
+npm test -- --testNamePattern="should create deposit"
 ```
 
 ---
 
-### 1. GET /api/swap/quote - Get Swap Quote
+## Manual API Testing
 
-Get pricing preview without executing a swap.
+### Generate Auth Token
 
-**Request:**
+Using JWT (recommended):
+
 ```bash
-curl -X GET "http://localhost:3003/api/swap/quote?fromAsset=USDC&toAsset=USDM&amount=10" \
-  -H "Authorization: $AUTH_TOKEN"
+# Create a user first via Privy sync, then use the returned token
+# Or generate a test token:
+
+node -e "
+const jwt = require('jsonwebtoken');
+const token = jwt.sign(
+  { userId: 'test-user-123' },
+  process.env.JWT_SECRET || 'kiota-development-secret-change-in-production',
+  { expiresIn: '7d' }
+);
+console.log('Bearer ' + token);
+"
 ```
 
-**Query Parameters:**
-- `fromAsset`: Source token (USDC, USDM, BCSPX, PAXG)
-- `toAsset`: Destination token (USDC, USDM, BCSPX, PAXG)
-- `amount`: Amount in token units (not wei)
+Save for reuse:
+```bash
+export AUTH="Authorization: Bearer <your_token>"
+```
 
-**Expected Response:**
+### Test Core Endpoints
+
+```bash
+# Health check
+curl http://localhost:3003/health
+
+# Get current user
+curl -H "$AUTH" http://localhost:3003/api/v1/auth/privy/me
+
+# Get dashboard
+curl -H "$AUTH" http://localhost:3003/api/v1/dashboard
+
+# Get portfolio
+curl -H "$AUTH" http://localhost:3003/api/v1/portfolio/detail
+
+# Get wallet
+curl -H "$AUTH" http://localhost:3003/api/v1/wallet
+```
+
+---
+
+## Testing Deposits
+
+### Test Onchain USDC Deposit
+
+#### 1. Create Deposit Intent
+
+```bash
+curl -X POST http://localhost:3003/api/v1/deposit/intent/create \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "expectedAmount": 10,
+    "token": "USDC",
+    "chain": "base"
+  }'
+```
+
+Response:
 ```json
 {
-  "status": 200,
-  "message": "Success",
   "data": {
-    "fromAsset": "USDC",
-    "toAsset": "USDM",
-    "fromAmount": 10,
-    "estimatedToAmount": 9.98,
-    "slippage": 1.0,
-    "priceImpact": 0.15,
-    "fees": {
-      "network": 0,
-      "protocol": 0
-    },
-    "route": [
-      "1inch Router"
-    ],
-    "expiresAt": "2024-01-23T12:34:56.789Z"
-  },
-  "errors": null
+    "depositSessionId": "uuid-here",
+    "depositAddress": "0x...",
+    "expiresAt": "..."
+  }
 }
 ```
 
-**Common Errors:**
+#### 2. Send USDC (Testnet)
 
-```json
-// 401 Unauthorized
-{
-  "status": 401,
-  "message": "Unauthorized",
-  "data": null,
-  "errors": ["Authorization header required"]
-}
+Send USDC to the `depositAddress` on Base Sepolia:
+- Use MetaMask or any wallet
+- USDC contract: `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
 
-// 503 Service Unavailable
-{
-  "status": 503,
-  "message": "Service Unavailable",
-  "data": null,
-  "errors": ["1inch API not configured. Please set ONEINCH_API_KEY"]
-}
+#### 3. Check Confirmation
 
-// 400 Bad Request
-{
-  "status": 400,
-  "message": "Bad Request",
-  "data": null,
-  "errors": ["Cannot swap same asset"]
-}
+```bash
+curl -X POST http://localhost:3003/api/v1/deposit/intent/confirm \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{"depositSessionId": "uuid-here"}'
+```
+
+#### 4. Convert to Assets
+
+```bash
+curl -X POST http://localhost:3003/api/v1/deposit/convert \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{"depositSessionId": "uuid-here"}'
 ```
 
 ---
 
-### 2. POST /api/swap/execute - Execute Swap
+### Test M-Pesa Deposit (Mock)
 
-Execute a swap transaction. This queues a background job that will:
-- Call the swap provider (Classic Swap or Fusion SDK based on network)
-- Sign and submit the transaction/order
-- Poll for completion
-- Update balances when complete
-
-**Request:**
 ```bash
-curl -X POST "http://localhost:3003/api/swap/execute" \
-  -H "Authorization: $AUTH_TOKEN" \
+# 1. Initiate deposit
+curl -X POST http://localhost:3003/api/v1/deposit/initiate \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amountKes": 1000,
+    "mpesaPhoneNumber": "+254712345678"
+  }'
+
+# 2. Trigger STK push
+curl -X POST http://localhost:3003/api/v1/deposit/mpesa/push \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{"transactionId": "uuid-here"}'
+
+# 3. Check status
+curl http://localhost:3003/api/v1/deposit/transaction/uuid-here \
+  -H "$AUTH"
+```
+
+---
+
+## Testing Swaps
+
+### Get Quote
+
+```bash
+curl "http://localhost:3003/api/v1/swap/quote?fromAsset=USDC&toAsset=USDM&amount=10" \
+  -H "$AUTH"
+```
+
+### Execute Swap
+
+```bash
+curl -X POST http://localhost:3003/api/v1/swap/execute \
+  -H "$AUTH" \
   -H "Content-Type: application/json" \
   -d '{
     "fromAsset": "USDC",
@@ -295,506 +274,233 @@ curl -X POST "http://localhost:3003/api/swap/execute" \
   }'
 ```
 
-**Body Parameters:**
-- `fromAsset`: Source token (required)
-- `toAsset`: Destination token (required)
-- `amount`: Amount in token units (required)
-- `slippage`: Slippage tolerance in percent (optional, default: 1.0)
+### Check Status
 
-**Expected Response:**
-```json
-{
-  "status": 201,
-  "message": "Created",
-  "data": {
-    "transactionId": "uuid-here",
-    "status": "pending",
-    "fromAsset": "USDC",
-    "toAsset": "USDM",
-    "fromAmount": 10,
-    "estimatedToAmount": 9.98,
-    "estimatedCompletionTime": "2-5 minutes"
-  },
-  "errors": null
-}
+```bash
+curl http://localhost:3003/api/v1/swap/status/uuid-here \
+  -H "$AUTH"
 ```
 
-**What Happens Next:**
+### View History
 
-1. **Swap Execution Job** (runs immediately):
-   - Calls swap provider
-   - **Classic Swap**: Approves token (if needed), signs transaction, broadcasts to RPC
-   - **Fusion SDK**: Creates EIP-712 order, submits to Fusion orderbook
-   - Updates transaction with order hash/tx hash
-
-2. **Swap Confirmation Job** (polls every 5 seconds):
-   - **Classic Swap**: Polls RPC for transaction receipt
-   - **Fusion SDK**: Polls 1inch API for order status
-   - When complete: Updates balances atomically
+```bash
+curl http://localhost:3003/api/v1/swap/history \
+  -H "$AUTH"
+```
 
 ---
 
-### 3. GET /api/swap/status/:transactionId - Check Status
+## Testing Goals
 
-Check the status of a swap transaction.
-
-**Request:**
 ```bash
-curl -X GET "http://localhost:3003/api/swap/status/uuid-here" \
-  -H "Authorization: $AUTH_TOKEN"
-```
+# Create goal
+curl -X POST http://localhost:3003/api/v1/goals \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Emergency Fund",
+    "category": "emergency",
+    "targetAmountKes": 50000,
+    "targetDate": "2025-12-31"
+  }'
 
-**Expected Response (Pending):**
-```json
-{
-  "status": 200,
-  "message": "Success",
-  "data": {
-    "transactionId": "uuid-here",
-    "status": "pending",
-    "fromAsset": "USDC",
-    "toAsset": "USDM",
-    "fromAmount": 10,
-    "estimatedToAmount": 9.98,
-    "actualToAmount": null,
-    "orderHash": "0x...",
-    "txHash": null,
-    "createdAt": "2024-01-23T12:00:00Z",
-    "completedAt": null
-  },
-  "errors": null
-}
-```
+# List goals
+curl http://localhost:3003/api/v1/goals \
+  -H "$AUTH"
 
-**Expected Response (Completed):**
-```json
-{
-  "status": 200,
-  "message": "Success",
-  "data": {
-    "transactionId": "uuid-here",
-    "status": "completed",
-    "fromAsset": "USDC",
-    "toAsset": "USDM",
-    "fromAmount": 10,
-    "estimatedToAmount": 9.98,
-    "actualToAmount": 9.97,
-    "orderHash": "0x...",
-    "txHash": "0x...",
-    "createdAt": "2024-01-23T12:00:00Z",
-    "completedAt": "2024-01-23T12:02:30Z"
-  },
-  "errors": null
-}
+# Contribute to goal
+curl -X POST http://localhost:3003/api/v1/goals/uuid-here/contribute \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{"amountKes": 5000}'
 ```
-
-**Status Values:**
-- `pending`: Swap queued, not yet executed
-- `processing`: Order submitted, waiting for fill
-- `completed`: Swap successful, balances updated
-- `failed`: Swap failed (see error message)
 
 ---
 
-### 4. GET /api/swap/history - Get Swap History
+## Testing Quiz
 
-Get user's swap transaction history.
-
-**Request:**
 ```bash
-curl -X GET "http://localhost:3003/api/swap/history" \
-  -H "Authorization: $AUTH_TOKEN"
-```
-
-**Expected Response:**
-```json
-{
-  "status": 200,
-  "message": "Success",
-  "data": [
-    {
-      "transactionId": "uuid-1",
-      "status": "completed",
-      "fromAsset": "USDC",
-      "toAsset": "USDM",
-      "fromAmount": 10,
-      "actualToAmount": 9.97,
-      "txHash": "0x...",
-      "createdAt": "2024-01-23T12:00:00Z",
-      "completedAt": "2024-01-23T12:02:30Z"
-    },
-    {
-      "transactionId": "uuid-2",
-      "status": "pending",
-      "fromAsset": "USDC",
-      "toAsset": "BCSPX",
-      "fromAmount": 50,
-      "actualToAmount": null,
-      "txHash": null,
-      "createdAt": "2024-01-23T12:05:00Z",
-      "completedAt": null
+# Submit quiz
+curl -X POST http://localhost:3003/api/v1/quiz/submit \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "answers": {
+      "primaryGoal": "wealth_growth",
+      "investmentTimeline": "3-5_years",
+      "riskTolerance": "moderate",
+      "investmentExperience": "beginner"
     }
-  ],
-  "errors": null
-}
+  }'
+
+# Accept strategy
+curl -X POST http://localhost:3003/api/v1/quiz/accept-strategy \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "uuid-here",
+    "accepted": true
+  }'
 ```
 
 ---
 
-## Monitoring Results
+## Monitoring
 
-### 1. Watch Logs in Real-Time
+### Bull Board (Job Queue)
 
-**Worker Logs (Terminal 1):**
+Access job monitoring dashboard:
+```
+http://localhost:3003/admin/queues
+```
+
+**In development:** Accessible without authentication
+**In production:** Requires `x-admin-key` header
+
+### View Logs
+
 ```bash
-# Watch for job processing
-tail -f worker.log  # If you redirect output to a file
+# API server logs (Terminal 1)
+# Worker logs (Terminal 2)
 
-# Or watch stdout
-# Jobs will log:
-# - "Executing swap for transaction {id}"
-# - "Swap executed successfully"
-# - "Polling order status for {orderHash}"
-# - "Order completed, updating balances"
+# Query jobs in Redis
+redis-cli keys "bull:*"
 ```
 
-**Server Logs (Terminal 2):**
+### Database Queries
+
 ```bash
-# Watch API requests
-# Logs will show:
-# - "Fetching swap quote"
-# - "Getting quote for swap execution"
-# - "Swap transaction created"
-# - "Swap execution job queued"
-```
-
-### 2. Bull Board Dashboard
-
-Open http://localhost:3003/admin/queues
-
-**Swap Execution Queue:**
-- Shows active swap execution jobs
-- Click job to see details (transaction ID, amount, assets)
-- See job status: waiting, active, completed, failed
-
-**Swap Confirmation Queue:**
-- Shows active confirmation polling jobs
-- See polling attempts and current status
-
-**Failed Jobs:**
-- Click "Failed" tab to see errors
-- View stack traces and retry history
-
-### 3. Check Transaction on Explorer
-
-**Ethereum Sepolia (Testnet):**
-```
-https://sepolia.etherscan.io/tx/{txHash}
-```
-
-**Ethereum Mainnet:**
-```
-https://etherscan.io/tx/{txHash}
-```
-
-### 4. Database Queries
-
-Check transaction status directly:
-
-```sql
--- Connect to database
 psql -h localhost -U postgres -d kiota_postgres
 
--- View recent swaps
-SELECT
-  id,
-  user_id,
-  source_asset,
-  destination_asset,
-  source_amount,
-  destination_amount,
-  status,
-  metadata->>'orderHash' as order_hash,
-  metadata->>'provider' as provider,
-  created_at,
-  updated_at
-FROM transactions
-WHERE type = 'swap'
-ORDER BY created_at DESC
-LIMIT 10;
+-- Recent transactions
+SELECT id, user_id, type, status, source_amount, destination_amount 
+FROM transactions ORDER BY created_at DESC LIMIT 10;
 
--- Check specific swap
-SELECT * FROM transactions WHERE id = 'uuid-here';
+-- Deposit sessions
+SELECT id, user_id, status, expected_amount, matched_amount 
+FROM deposit_sessions ORDER BY created_at DESC LIMIT 10;
+
+-- Portfolio values
+SELECT user_id, total_value_usd, stable_yields_value_usd 
+FROM portfolios;
 ```
 
 ---
 
 ## Troubleshooting
 
-### Issue: "1inch API not configured"
-
-**Cause**: Missing `ONEINCH_API_KEY` environment variable
-
-**Fix**:
-1. Get API key from https://portal.1inch.dev
-2. Add to `.env.development`:
-   ```bash
-   ONEINCH_API_KEY="your_key_here"
-   ```
-3. Restart worker and server
-
----
-
-### Issue: "Insufficient funds for gas"
-
-**Cause**: Server wallet doesn't have enough ETH for gas (Classic Swap only)
-
-**Fix**:
-1. Check wallet balance:
-   ```bash
-   cast balance $SWAP_WALLET_ADDRESS --rpc-url https://ethereum-sepolia-rpc.publicnode.com
-   ```
-2. Get test ETH from faucet: https://sepoliafaucet.com
-3. Send to your `SWAP_WALLET_ADDRESS`
-
----
-
-### Issue: "Token not deployed on ethereum-sepolia testnet"
-
-**Cause**: USDM, BCSPX, or PAXG don't have testnet addresses configured
-
-**Fix**:
-For testnet, only USDC is available. To test other assets:
-1. Deploy test versions on Sepolia, or
-2. Use mainnet with `ONEINCH_NETWORK="ethereum"`
-
----
-
-### Issue: Fusion order expires unfilled
-
-**Cause**: Order not competitive enough for resolvers to fill
-
-**Fix**:
-1. Check order status on 1inch:
-   ```bash
-   curl -H "Authorization: Bearer $ONEINCH_API_KEY" \
-     https://api.1inch.dev/fusion/orders/{orderHash}
-   ```
-2. Try larger amounts (minimum ~$10 recommended)
-3. Increase slippage tolerance
-
----
-
-### Issue: Worker not processing jobs
-
-**Check**:
-1. Redis is running:
-   ```bash
-   redis-cli ping
-   ```
-2. Worker process is running:
-   ```bash
-   ps aux | grep "npm run worker"
-   ```
-3. Check Bull Board for stuck jobs
-4. Restart worker:
-   ```bash
-   # Kill existing worker
-   pkill -f "npm run worker"
-
-   # Start new worker
-   npm run worker
-   ```
-
----
-
-### Issue: "Invalid token format"
-
-**Cause**: Auth token is malformed or expired
-
-**Fix**:
-1. Generate new token (see [Authentication](#authentication))
-2. Ensure token is base64-encoded JSON
-3. Check expiration timestamp is in future
-
----
-
-## Testing Workflow Examples
-
-### Example 1: Complete Testnet Flow (Classic Swap)
+### "Authorization header required"
 
 ```bash
-# 1. Set environment to testnet
-export ONEINCH_NETWORK="ethereum-sepolia"
+# Check token is set
+echo $AUTH
 
-# 2. Generate auth token
-export AUTH_TOKEN="Bearer $(node -e 'console.log(Buffer.from(JSON.stringify({userId:"test-123",iat:Date.now(),exp:Date.now()+3600000})).toString("base64"))')"
+# Regenerate token if expired
+```
 
-# 3. Start services
-npm run worker &
-npm run dev &
+### "Database connection refused"
 
-# 4. Get quote
-curl -X GET "http://localhost:3003/api/swap/quote?fromAsset=USDC&toAsset=USDM&amount=10" \
-  -H "Authorization: $AUTH_TOKEN"
+```bash
+# Check PostgreSQL is running
+pg_isready
 
-# 5. Execute swap
-SWAP_RESPONSE=$(curl -X POST "http://localhost:3003/api/swap/execute" \
-  -H "Authorization: $AUTH_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"fromAsset":"USDC","toAsset":"USDM","amount":10}')
+# Check connection
+psql -h localhost -U postgres -d kiota_postgres -c "SELECT 1;"
+```
 
-# 6. Extract transaction ID
-TRANSACTION_ID=$(echo $SWAP_RESPONSE | jq -r '.data.transactionId')
+### "Redis connection refused"
 
-# 7. Poll status every 10 seconds
-watch -n 10 "curl -s -X GET \"http://localhost:3003/api/swap/status/$TRANSACTION_ID\" -H \"Authorization: $AUTH_TOKEN\" | jq"
+```bash
+# Check Redis is running
+redis-cli ping
 
-# 8. Check on Etherscan when complete
+# Start Redis if needed
+redis-server &
+```
+
+### "1inch API not configured"
+
+```bash
+# Set API key in .env.development
+ONEINCH_API_KEY="your_key_here"
+
+# Restart services
+```
+
+### Worker not processing jobs
+
+```bash
+# Check Bull Board for stuck jobs
+# Restart worker
+pkill -f "npm run worker"
+npm run worker
+```
+
+### Swap fails with "insufficient balance"
+
+```bash
+# Check wallet balance
+curl http://localhost:3003/api/v1/wallet -H "$AUTH"
+
+# Fund wallet with testnet tokens
 ```
 
 ---
 
-### Example 2: Mainnet Flow (Fusion SDK)
+## Test Checklist
 
-```bash
-# 1. Set environment to mainnet
-export ONEINCH_NETWORK="ethereum"
+### Basic Flow
 
-# 2. Follow steps 2-8 from Example 1
+- [ ] Health check returns OK
+- [ ] User can sync via Privy
+- [ ] Quiz generates strategy
+- [ ] Wallet is created
+- [ ] Dashboard loads
 
-# Note: Fusion takes 1-5 minutes (auction-based)
-```
+### Deposits
 
----
+- [ ] Deposit intent created
+- [ ] USDC transfer detected
+- [ ] Deposit confirmed
+- [ ] Assets converted to allocation
 
-### Example 3: Automated Testing Script
+### Swaps
 
-Create `test-swap.sh`:
+- [ ] Quote returns pricing
+- [ ] Swap executes
+- [ ] Status updates to completed
+- [ ] Portfolio balances updated
 
-```bash
-#!/bin/bash
+### Goals
 
-# Configuration
-API_URL="http://localhost:3003/api/swap"
-FROM_ASSET="USDC"
-TO_ASSET="USDM"
-AMOUNT=10
+- [ ] Goal created
+- [ ] Goal listed
+- [ ] Contribution recorded
+- [ ] Progress calculated
 
-# Generate token
-PAYLOAD=$(cat <<EOF
-{
-  "userId": "test-user-123",
-  "iat": $(date +%s)000,
-  "exp": $(($(date +%s) + 3600))000
-}
-EOF
-)
-TOKEN=$(echo -n "$PAYLOAD" | base64)
-AUTH_HEADER="Authorization: Bearer $TOKEN"
+### Rebalancing
 
-# Test 1: Get quote
-echo "Testing quote endpoint..."
-QUOTE=$(curl -s -X GET "$API_URL/quote?fromAsset=$FROM_ASSET&toAsset=$TO_ASSET&amount=$AMOUNT" \
-  -H "$AUTH_HEADER")
-echo "$QUOTE" | jq
-
-# Test 2: Execute swap
-echo "Executing swap..."
-SWAP=$(curl -s -X POST "$API_URL/execute" \
-  -H "$AUTH_HEADER" \
-  -H "Content-Type: application/json" \
-  -d "{\"fromAsset\":\"$FROM_ASSET\",\"toAsset\":\"$TO_ASSET\",\"amount\":$AMOUNT}")
-echo "$SWAP" | jq
-
-# Extract transaction ID
-TX_ID=$(echo "$SWAP" | jq -r '.data.transactionId')
-
-if [ "$TX_ID" != "null" ]; then
-  echo "Transaction ID: $TX_ID"
-
-  # Test 3: Poll status
-  echo "Polling status..."
-  for i in {1..30}; do
-    STATUS=$(curl -s -X GET "$API_URL/status/$TX_ID" -H "$AUTH_HEADER")
-    CURRENT_STATUS=$(echo "$STATUS" | jq -r '.data.status')
-
-    echo "[$i/30] Status: $CURRENT_STATUS"
-
-    if [ "$CURRENT_STATUS" = "completed" ] || [ "$CURRENT_STATUS" = "failed" ]; then
-      echo "Final status:"
-      echo "$STATUS" | jq
-      break
-    fi
-
-    sleep 10
-  done
-else
-  echo "Failed to execute swap"
-  exit 1
-fi
-```
-
-Run:
-```bash
-chmod +x test-swap.sh
-./test-swap.sh
-```
+- [ ] Drift detected when >5%
+- [ ] Rebalance generates swaps
+- [ ] Swaps execute correctly
 
 ---
 
-## Success Criteria
+## CI/CD Testing
 
-Your swap integration is working correctly when:
+```bash
+# Run tests in CI mode
+CI=true npm test
 
-✅ **Quote Endpoint**:
-- Returns pricing for USDC → other assets
-- Response time < 2 seconds
-- Price impact looks reasonable
-
-✅ **Execute Endpoint**:
-- Creates transaction record
-- Queues background job
-- Returns transaction ID immediately
-
-✅ **Background Processing**:
-- Execution job runs within 5 seconds
-- **Classic Swap**: Transaction confirmed on Etherscan within 1 minute
-- **Fusion**: Order fills within 1-5 minutes
-
-✅ **Status Endpoint**:
-- Status updates from pending → processing → completed
-- Transaction hash appears when complete
-- Actual output amount is close to estimate
-
-✅ **Bull Board**:
-- Jobs appear in queue
-- No jobs stuck in "active" state for >5 minutes
-- Failed jobs have clear error messages
-
----
-
-## Next Steps
-
-After successful testing:
-
-1. **Test Different Asset Pairs**: Try USDC → BCSPX, USDC → PAXG
-2. **Test Different Amounts**: Small ($5), medium ($100), large ($1000+)
-3. **Test Edge Cases**: Same asset swap (should fail), zero amount (should fail)
-4. **Test Auto-Rebalancing**: Trigger rebalancing logic if implemented
-5. **Test Deposit Conversion**: Test converting deposits to target assets
-6. **Load Testing**: Execute multiple swaps concurrently
-7. **Monitor Gas Costs**: Track ETH spent on Classic Swap
-8. **Deploy to Staging**: Test on staging environment
-9. **Deploy to Production**: Use Fusion on mainnet for gasless swaps
+# With coverage threshold
+npm run test:coverage -- --coverageThreshold='{"global":{"branches":70}}'
+```
 
 ---
 
 ## Additional Resources
 
-- **1inch Documentation**: https://docs.1inch.io
-- **1inch Developer Portal**: https://portal.1inch.dev
-- **Ethereum Sepolia Faucet**: https://sepoliafaucet.com
-- **Etherscan Sepolia**: https://sepolia.etherscan.io
-- **Architecture Docs**: `docs/SWAP_PROVIDER_ARCHITECTURE.md`
-- **API Comparison**: `docs/1INCH-API-COMPARISON.md`
+- **API Reference**: [API-REFERENCE.md](./API-REFERENCE.md)
+- **Architecture**: [ARCHITECTURE.md](./ARCHITECTURE.md)
+- **Deposit Flow**: [DEPOSIT-FLOW-ARCHITECTURE.md](./DEPOSIT-FLOW-ARCHITECTURE.md)
+- **Swap Architecture**: [SWAP_PROVIDER_ARCHITECTURE.md](./SWAP_PROVIDER_ARCHITECTURE.md)

@@ -4,6 +4,7 @@ import { PortfolioRepository } from '../repositories/portfolio.repo';
 import { GoalRepository } from '../repositories/goal.repo';
 import { MarketDataRepository } from '../repositories/market-data.repo';
 import Controller from './controller';
+import { AuthenticatedRequest } from '../interfaces/IAuth';
 
 /**
  * Dashboard Controller
@@ -24,7 +25,7 @@ class DashboardController extends Controller {
             const goalRepo: GoalRepository = new GoalRepository();
             const marketDataRepo: MarketDataRepository = new MarketDataRepository();
             
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
 
             if (!userId) {
                 return res.send(
@@ -164,7 +165,7 @@ class DashboardController extends Controller {
             const portfolioRepo: PortfolioRepository = new PortfolioRepository();
             const marketDataRepo: MarketDataRepository = new MarketDataRepository();
             
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
 
             if (!userId) {
                 return res.send(
@@ -218,7 +219,7 @@ class DashboardController extends Controller {
             const userRepo: UserRepository = new UserRepository();
             const portfolioRepo: PortfolioRepository = new PortfolioRepository();
             
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
 
             if (!userId) {
                 return res.send(

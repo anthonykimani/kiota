@@ -5,6 +5,7 @@ import cors from "cors";
 import corsOptions from "./configs/corsconfig";
 import AppDataSource from "./configs/ormconfig";
 import { serverAdapter } from "./configs/bull-board.config";
+import { requireAdminAuth } from "./middleware/auth";
 
 // Import routes
 import authRoutes from "./routes/index.auth";
@@ -15,6 +16,7 @@ import depositRoutes from "./routes/index.deposit";
 import portfolioRoutes from "./routes/index.portfolio";
 import swapRoutes from "./routes/index.swap";
 import privyRoutes from "./routes/index.privy";
+import goalRoutes from "./routes/index.goal";
 
 // Load environment variables
 dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
@@ -31,10 +33,8 @@ app.enable("trust proxy");
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// Bull Board - Job monitoring dashboard
-// WARNING: In production, add authentication middleware here!
-// app.use('/admin/queues', requireAdmin, serverAdapter.getRouter());
-app.use('/admin/queues', serverAdapter.getRouter());
+// Bull Board - Job monitoring dashboard with admin authentication
+app.use('/admin/queues', requireAdminAuth, serverAdapter.getRouter());
 
 // Routes
 app.use("/api/v1/auth", authRoutes);
@@ -44,7 +44,8 @@ app.use("/api/v1/dashboard", dashboardRoutes);
 app.use("/api/v1/deposit", depositRoutes);
 app.use("/api/v1/portfolio", portfolioRoutes);
 app.use("/api/v1/swap", swapRoutes);
-app.use("/api/v1/privyAuth/privy", privyRoutes)
+app.use("/api/v1/auth/privy", privyRoutes);
+app.use("/api/v1/goals", goalRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -68,7 +69,8 @@ app.get("/", (req, res) => {
             deposit: "/api/v1/deposit",
             portfolio: "/api/v1/portfolio",
             swap: "/api/v1/swap",
-            privyAuth: "/api/v1/auth/privy"
+            privy: "/api/v1/auth/privy",
+            goals: "/api/v1/goals"
         }
     });
 });
