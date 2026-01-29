@@ -11,6 +11,7 @@ import { AuthenticatedRequest } from '../interfaces/IAuth';
 import { DepositSessionRepository } from '../repositories/deposit-session.repo';
 import { baseSepolia } from 'viem/chains';
 import { DEPOSIT_COMPLETION_QUEUE, ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE } from '../configs/queue.config';
+import { assetRegistry } from '../services/asset-registry.service';
 
 const BASE_RPC_URL = process.env.BASE_RPC_URL || '';
 const BASE_USDC_ADDRESS = process.env.BASE_USDC_ADDRESS || '';
@@ -480,20 +481,24 @@ class DepositController extends Controller {
                 feeUsd
             });
 
+            const stableAsset = await assetRegistry.getPrimaryAssetByClassKey('stable_yields');
+            const stocksAsset = await assetRegistry.getPrimaryAssetByClassKey('tokenized_stocks');
+            const goldAsset = await assetRegistry.getPrimaryAssetByClassKey('tokenized_gold');
+
             const assetBreakdown = {
                 stableYields: {
-                    asset: 'USDM',
+                    asset: stableAsset?.symbol || null,
                     amountUsd: effectiveAmountUsd * ((allocation.stableYields || 0) / 100),
                     percentage: allocation.stableYields || 0
                 },
                 tokenizedStocks: {
-                    asset: 'bCSPX',
+                    asset: stocksAsset?.symbol || null,
                     amountUsd: effectiveAmountUsd * ((allocation.tokenizedStocks || 0) / 100),
                     percentage: allocation.tokenizedStocks || 0,
                     requiresTier2: true
                 },
                 tokenizedGold: {
-                    asset: 'PAXG',
+                    asset: goldAsset?.symbol || null,
                     amountUsd: effectiveAmountUsd * ((allocation.tokenizedGold || 0) / 100),
                     percentage: allocation.tokenizedGold || 0
                 }
@@ -783,7 +788,7 @@ class DepositController extends Controller {
      * Flow:
      * 1. Get deposit session
      * 2. Verify it's confirmed
-     * 3. Get user's target allocation (80% USDM, 15% bCSPX, 5% PAXG)
+     * 3. Get user's target allocation (class-based, using primary assets per class)
      * 4. Calculate swap amounts
      * 5. Create SWAP transactions for each target asset
      * 6. Queue SWAP_EXECUTION_QUEUE jobs
@@ -808,7 +813,6 @@ class DepositController extends Controller {
             const { UserRepository } = await import('../repositories/user.repo');
             const { SwapRepository } = await import('../repositories/swap.repo');
             const { SWAP_EXECUTION_QUEUE } = await import('../configs/queue.config');
-            const { getCategoryAsset } = await import('../configs/tokens.config');
             const { v4: uuidv4 } = await import('uuid');
 
             const sessionRepo = new DepositSessionRepository();
@@ -864,18 +868,28 @@ class DepositController extends Controller {
             // Create conversion group ID (links all swaps in same conversion)
             const conversionGroupId = uuidv4();
 
+            const stableAsset = await assetRegistry.getPrimaryAssetByClassKey('stable_yields');
+            const stocksAsset = await assetRegistry.getPrimaryAssetByClassKey('tokenized_stocks');
+            const goldAsset = await assetRegistry.getPrimaryAssetByClassKey('tokenized_gold');
+
+            if (!stableAsset || !stocksAsset || !goldAsset) {
+                return res.send(
+                    super.response(super._500, null, ['Missing primary assets for one or more classes'])
+                );
+            }
+
             // Create swap transactions for non-zero amounts
             const swapRepo = new SwapRepository();
             const createdSwaps = [];
 
-            // Swap USDC → USDM (stableYields)
+            // Swap USDC → primary Stable Yields asset
             if (stableYieldsAmount >= 1) {
                 const estimatedToAmount = stableYieldsAmount * 0.998; // Assume 0.2% slippage
 
                 const transaction = await swapRepo.createSwap({
                     userId,
                     fromAsset: 'USDC',
-                    toAsset: 'USDM',
+                    toAsset: stableAsset.symbol,
                     fromAmount: stableYieldsAmount,
                     estimatedToAmount,
                     slippage: 1.0,
@@ -892,7 +906,7 @@ class DepositController extends Controller {
                         transactionId: transaction.id,
                         userId,
                         fromAsset: 'USDC',
-                        toAsset: 'USDM',
+                        toAsset: stableAsset.symbol,
                         amount: stableYieldsAmount,
                         slippage: 1.0,
                     },
@@ -907,19 +921,19 @@ class DepositController extends Controller {
 
                 createdSwaps.push({
                     transactionId: transaction.id,
-                    toAsset: 'USDM',
+                    toAsset: stableAsset.symbol,
                     amount: stableYieldsAmount,
                 });
             }
 
-            // Swap USDC → bCSPX (tokenizedStocks)
+            // Swap USDC → primary Tokenized Stocks asset
             if (tokenizedStocksAmount >= 1) {
                 const estimatedToAmount = tokenizedStocksAmount * 0.998;
 
                 const transaction = await swapRepo.createSwap({
                     userId,
                     fromAsset: 'USDC',
-                    toAsset: 'BCSPX',
+                    toAsset: stocksAsset.symbol,
                     fromAmount: tokenizedStocksAmount,
                     estimatedToAmount,
                     slippage: 1.0,
@@ -936,7 +950,7 @@ class DepositController extends Controller {
                         transactionId: transaction.id,
                         userId,
                         fromAsset: 'USDC',
-                        toAsset: 'BCSPX',
+                        toAsset: stocksAsset.symbol,
                         amount: tokenizedStocksAmount,
                         slippage: 1.0,
                     },
@@ -951,19 +965,19 @@ class DepositController extends Controller {
 
                 createdSwaps.push({
                     transactionId: transaction.id,
-                    toAsset: 'BCSPX',
+                    toAsset: stocksAsset.symbol,
                     amount: tokenizedStocksAmount,
                 });
             }
 
-            // Swap USDC → PAXG (tokenizedGold)
+            // Swap USDC → primary Tokenized Gold asset
             if (tokenizedGoldAmount >= 1) {
                 const estimatedToAmount = tokenizedGoldAmount * 0.998;
 
                 const transaction = await swapRepo.createSwap({
                     userId,
                     fromAsset: 'USDC',
-                    toAsset: 'PAXG',
+                    toAsset: goldAsset.symbol,
                     fromAmount: tokenizedGoldAmount,
                     estimatedToAmount,
                     slippage: 1.0,
@@ -980,7 +994,7 @@ class DepositController extends Controller {
                         transactionId: transaction.id,
                         userId,
                         fromAsset: 'USDC',
-                        toAsset: 'PAXG',
+                        toAsset: goldAsset.symbol,
                         amount: tokenizedGoldAmount,
                         slippage: 1.0,
                     },
@@ -995,7 +1009,7 @@ class DepositController extends Controller {
 
                 createdSwaps.push({
                     transactionId: transaction.id,
-                    toAsset: 'PAXG',
+                    toAsset: goldAsset.symbol,
                     amount: tokenizedGoldAmount,
                 });
             }

@@ -79,14 +79,25 @@ curl http://localhost:3003/health
 | **Gamification** | Partial | Schema only |
 | **Chama (Groups)** | Partial | Entities only |
 
-### Supported Assets
+---
 
-| Asset | Symbol | Purpose | Status |
-|-------|--------|---------|--------|
-| USD Coin | USDC | Deposit currency | Active |
-| USD Mountain | USDM | Stable yield (5% APY) | Active |
-| Backed CSP Index | bCSPX | S&P 500 exposure | Active |
-| Paxos Gold | PAXG | Gold hedge | Active |
+## Migration Notes (Asset Registry)
+
+The asset model is now class-led with a database-backed asset registry.
+
+- New tables: `asset_classes`, `assets`
+- Transactions now store asset symbols as strings and include `sourceAssetClassKey` / `destinationAssetClassKey` / `feeAssetClassKey`
+- Portfolio holdings are tracked per asset in `portfolio_holdings` and rolled up into class totals
+
+### Supported Asset Classes
+
+Kiota is centered on asset classes, not specific tokens. Token tickers shown below are examples of the current implementation and may change as providers evolve.
+
+| Asset Class | Example Token | Purpose | Status |
+|------------|---------------|---------|--------|
+| Stable Yields | USDM | USD-denominated yield | Active |
+| Tokenized Stocks | bCSPX | S&P 500 exposure | Active |
+| Tokenized Gold | PAXG | Gold hedge | Active |
 
 ---
 

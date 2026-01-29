@@ -2,7 +2,8 @@ import { Repository } from "typeorm";
 import dotenv from "dotenv";
 import AppDataSource from "../configs/ormconfig";
 import { Transaction } from "../models/transaction.entity";
-import { AssetType, PaymentMethod, TransactionStatus, TransactionType } from "../enums/Transaction";
+import { PaymentMethod, TransactionStatus, TransactionType } from "../enums/Transaction";
+import { assetRegistry } from "../services/asset-registry.service";
 
 
 export class TransactionRepository {
@@ -46,15 +47,19 @@ export class TransactionRepository {
         if (existing) return existing;
 
         // 2) Create new
+        const assetClassKey = await assetRegistry.getAssetClassKeyBySymbol(data.tokenSymbol);
+
         const tx = this.repo.create({
             userId: data.userId,
             type: TransactionType.DEPOSIT,
             status: TransactionStatus.COMPLETED,
-            sourceAsset: AssetType.USDC,
+            sourceAsset: data.tokenSymbol,
             sourceAmount: data.amountUsd,
-            destinationAsset: AssetType.USDC,
+            destinationAsset: data.tokenSymbol,
             destinationAmount: data.amountUsd,
             valueUsd: data.amountUsd,
+            sourceAssetClassKey: assetClassKey ?? null,
+            destinationAssetClassKey: assetClassKey ?? null,
             chain: data.chain,
             tokenSymbol: data.tokenSymbol,
             tokenAddress: data.tokenAddress,
@@ -102,15 +107,18 @@ export class TransactionRepository {
         feeUsd?: number;
     }): Promise<Transaction> {
         try {
+            const destinationAssetClassKey = await assetRegistry.getAssetClassKeyBySymbol('USDC');
+
             const transaction = this.repo.create({
                 userId: data.userId,
                 type: TransactionType.DEPOSIT,
                 status: TransactionStatus.PENDING,
-                sourceAsset: AssetType.KES,
+                sourceAsset: 'KES',
                 sourceAmount: data.amountKes,
-                destinationAsset: AssetType.USDC,
+                destinationAsset: 'USDC',
                 destinationAmount: data.amountUsd,
                 valueUsd: data.amountUsd,
+                destinationAssetClassKey: destinationAssetClassKey ?? null,
                 paymentMethod: PaymentMethod.MPESA,
                 mpesaPhoneNumber: data.mpesaPhoneNumber,
                 exchangeRate: data.exchangeRate,
@@ -201,7 +209,7 @@ export class TransactionRepository {
     }
 
     // Screen 12: Get transactions for asset detail
-    async getByUserAndAsset(userId: string, asset: AssetType, limit: number = 20): Promise<Transaction[]> {
+    async getByUserAndAsset(userId: string, asset: string, limit: number = 20): Promise<Transaction[]> {
         try {
             return await this.repo.find({
                 where: [

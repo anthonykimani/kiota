@@ -293,10 +293,15 @@ class QuizController extends Controller {
         - Comfortable with dollars: ${profile.comfortableWithDollars ? 'Yes' : 'No'}
         - Priorities: ${profile.priorities?.join(', ') || 'Not specified'}
 
-        Available Assets for Phase 1 MVP:
-        1. USDM (Stable Yield) - 5.0% APY, no volatility, USD-backed
-        2. bCSPX (S&P 500) - ~10% avg return, medium volatility, requires Tier 2 & KYC
-        3. PAXG (Gold) - Tracks gold price, low volatility, hedge asset
+        Available Asset Classes for Phase 1 MVP:
+        1. Stable Yields - 5.0% APY target, low volatility, USD-backed
+        2. Tokenized Stocks - ~10% avg return, medium volatility, requires Tier 2 & KYC
+        3. Tokenized Gold - Tracks gold price, low volatility, hedge asset
+
+        If you include defaultAssets, use the current primary tokens as examples:
+        - Stable Yields: USDM
+        - Tokenized Stocks: BCSPX
+        - Tokenized Gold: PAXG
 
         Return ONLY valid JSON matching the schema. Allocation must sum to 100.`;
 
@@ -376,7 +381,7 @@ class QuizController extends Controller {
             strategyName: 'Conservative Grower',
             defaultAssets: {
                 stableYields: 'USDM',
-                tokenizedStocks: 'bCSPX',
+                tokenizedStocks: 'BCSPX',
                 tokenizedGold: 'PAXG'
             },
             rationale: 'A balanced approach focusing on preservation with moderate growth.',

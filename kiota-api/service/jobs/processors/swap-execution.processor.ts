@@ -19,7 +19,7 @@ import { Job } from 'bull';
 import { SwapRepository } from '../../repositories/swap.repo';
 import { WalletRepository } from '../../repositories/wallet.repo';
 import { swapProvider } from '../../services/swap-provider.factory';
-import { getTokenAddress, AssetType as TokenAssetType, toWei } from '../../configs/tokens.config';
+import { assetRegistry } from '../../services/asset-registry.service';
 import { createLogger } from '../../utils/logger.util';
 import { TransactionStatus } from '../../enums/Transaction';
 
@@ -31,8 +31,8 @@ import { SWAP_CONFIRMATION_QUEUE } from '../../configs/queue.config';
 export interface SwapExecutionJobData {
   transactionId: string;
   userId: string;
-  fromAsset: TokenAssetType;
-  toAsset: TokenAssetType;
+  fromAsset: string;
+  toAsset: string;
   amount: number;
   slippage?: number; // Default 1%
 }
@@ -125,9 +125,17 @@ export async function processSwapExecution(
 
     // Step 4: Get token addresses
     const network = process.env.ONEINCH_NETWORK || 'ethereum';
-    const fromTokenAddress = getTokenAddress(fromAsset, network);
-    const toTokenAddress = getTokenAddress(toAsset, network);
-    const amountWei = toWei(amount, fromAsset);
+    const fromAssetRecord = await assetRegistry.getAssetBySymbol(fromAsset);
+    const toAssetRecord = await assetRegistry.getAssetBySymbol(toAsset);
+
+    if (!fromAssetRecord || !toAssetRecord) {
+      throw new Error('Unsupported asset symbol for swap execution');
+    }
+
+    const fromTokenAddress = await assetRegistry.resolveAssetAddress(fromAssetRecord, network);
+    const toTokenAddress = await assetRegistry.resolveAssetAddress(toAssetRecord, network);
+    const decimals = assetRegistry.resolveAssetDecimals(fromAssetRecord);
+    const amountWei = toWeiByDecimals(amount, decimals);
 
     logger.info('Executing swap via swap provider', {
       fromToken: fromTokenAddress.substring(0, 10) + '...',
@@ -223,4 +231,10 @@ export async function processSwapExecution(
 
     throw error; // Re-throw to let Bull handle retry
   }
+}
+function toWeiByDecimals(amount: number | string, decimals: number): string {
+  const [whole, fraction = ''] = String(amount).split('.');
+  const paddedFraction = fraction.padEnd(decimals, '0').slice(0, decimals);
+  const combined = `${whole}${paddedFraction}`.replace(/^0+(?=\d)/, '');
+  return (combined === '' ? 0n : BigInt(combined)).toString();
 }

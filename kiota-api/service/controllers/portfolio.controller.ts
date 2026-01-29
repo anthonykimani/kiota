@@ -4,9 +4,10 @@ import { TransactionRepository } from '../repositories/transaction.repo';
 import { MarketDataRepository } from '../repositories/market-data.repo';
 import { UserRepository } from '../repositories/user.repo';
 import { WalletRepository } from '../repositories/wallet.repo';
-import { AssetSymbol } from '../enums/MarketData';
+import { PortfolioHoldingRepository } from '../repositories/portfolio-holding.repo';
 import Controller from './controller';
 import { AuthenticatedRequest } from '../interfaces/IAuth';
+import { assetRegistry } from '../services/asset-registry.service';
 
 /**
  * Portfolio Controller
@@ -24,6 +25,7 @@ class PortfolioController extends Controller {
         try {
             const portfolioRepo: PortfolioRepository = new PortfolioRepository();
             const transactionRepo: TransactionRepository = new TransactionRepository();
+            const holdingRepo: PortfolioHoldingRepository = new PortfolioHoldingRepository();
             const marketDataRepo: MarketDataRepository = new MarketDataRepository();
             const userRepo: UserRepository = new UserRepository();
             
@@ -70,55 +72,47 @@ class PortfolioController extends Controller {
             // Get KES/USD rate
             const kesUsdRate = await marketDataRepo.getKesUsdRate();
 
-            // Get asset prices
-            const usdmPrice = 1.0;
-            const bcsxPrice = await marketDataRepo.getAssetPrice(AssetSymbol.BCSPX) || 0;
-            const paxgPrice = await marketDataRepo.getAssetPrice(AssetSymbol.PAXG) || 0;
-
             const assetBreakdown = [
                 {
-                    category: 'preservation',
-                    emoji: '🛡️',
-                    symbol: 'USDM',
-                    name: 'Mountain Protocol USD',
+                    classKey: 'stable_yields',
+                    name: 'Stable Yields',
                     valueUsd: portfolio.stableYieldsValueUsd,
                     percentage: portfolio.stableYieldsPercent,
                     targetPercentage: user.targetStableYieldsPercent,
-                    changeToday: 0,
-                    changeTodayUsd: 0,
                     apy: 5.0,
-                    currentPrice: usdmPrice,
-                    description: 'Dollar-backed • 5% yield • Low risk'
                 },
                 {
-                    category: 'growth',
-                    emoji: '📈',
-                    symbol: 'bCSPX',
-                    name: 'Backed S&P 500 ETF',
+                    classKey: 'tokenized_stocks',
+                    name: 'Tokenized Stocks',
                     valueUsd: portfolio.tokenizedStocksValueUsd,
                     percentage: portfolio.tokenizedStocksPercent,
                     targetPercentage: user.targetTokenizedStocksPercent,
-                    changeToday: 0.5,
-                    changeTodayUsd: portfolio.tokenizedStocksValueUsd * 0.005,
                     avgReturn: 10.2,
-                    currentPrice: bcsxPrice,
-                    description: 'S&P 500 • ~10% avg return • Med risk',
-                    requiresTier2: true
+                    requiresTier2: true,
                 },
                 {
-                    category: 'hedge',
-                    emoji: '🥇',
-                    symbol: 'PAXG',
-                    name: 'Paxos Gold',
+                    classKey: 'tokenized_gold',
+                    name: 'Tokenized Gold',
                     valueUsd: portfolio.tokenizedGoldValueUsd,
                     percentage: portfolio.tokenizedGoldPercent,
                     targetPercentage: user.targetTokenizedGoldPercent,
-                    changeToday: -0.2,
-                    changeTodayUsd: portfolio.tokenizedGoldValueUsd * -0.002,
-                    currentPrice: paxgPrice,
-                    description: 'Gold-backed • Inflation hedge • Stable'
                 }
             ].filter(asset => asset.valueUsd > 0);
+
+            const holdings = await holdingRepo.getByPortfolio(portfolio.id);
+            const holdingsData = await Promise.all(
+                holdings.map(async (holding) => {
+                    const asset = await assetRegistry.getAssetBySymbol(holding.assetSymbol);
+                    return {
+                        symbol: holding.assetSymbol,
+                        name: asset?.name || holding.assetSymbol,
+                        assetClassKey: holding.assetCategory,
+                        balance: Number(holding.balance),
+                        valueUsd: Number(holding.valueUsd),
+                        lastUpdated: holding.lastUpdated,
+                    };
+                })
+            );
 
             // Get recent transactions
             const recentTransactions = await transactionRepo.getRecentByUser(userId, 10);
@@ -150,6 +144,7 @@ class PortfolioController extends Controller {
                     kesUsdRate
                 },
                 assets: assetBreakdown,
+                holdings: holdingsData,
                 needsRebalance: PortfolioController.checkRebalanceNeeded(portfolio, user),
                 rebalanceThreshold: 5,
                 transactions: formattedTransactions,
@@ -174,9 +169,11 @@ class PortfolioController extends Controller {
         try {
             const portfolioRepo: PortfolioRepository = new PortfolioRepository();
             const transactionRepo: TransactionRepository = new TransactionRepository();
+            const holdingRepo: PortfolioHoldingRepository = new PortfolioHoldingRepository();
             
             const userId = (req as AuthenticatedRequest).userId;
             const { symbol } = req.params;
+            const assetSymbol = String(symbol).toUpperCase();
 
             if (!userId) {
                 return res.send(
@@ -184,17 +181,6 @@ class PortfolioController extends Controller {
                         super._401,
                         null,
                         ['Not authenticated']
-                    )
-                );
-            }
-
-            const validSymbols = ['USDM', 'bCSPX', 'PAXG'];
-            if (!validSymbols.includes(symbol)) {
-                return res.send(
-                    super.response(
-                        super._400,
-                        null,
-                        ['Invalid asset symbol']
                     )
                 );
             }
@@ -212,69 +198,34 @@ class PortfolioController extends Controller {
                 );
             }
 
-            let assetData;
-            if (symbol === 'USDM') {
-                assetData = {
-                    symbol: 'USDM',
-                    name: 'Mountain Protocol USD',
-                    category: 'Stable Yields',
-                    emoji: '🛡️',
-                    valueUsd: portfolio.stableYieldsValueUsd,
-                    percentage: portfolio.stableYieldsPercent,
-                    apy: 5.0,
-                    riskLevel: 'Very Low',
-                    description: 'USDM is a yield-bearing stablecoin backed by US Treasuries.',
-                    features: [
-                        '5.0% APY (auto-compounding)',
-                        'Backed by US Treasuries',
-                        'No lock-up period',
-                        'Instant liquidity'
-                    ]
-                };
-            } else if (symbol === 'bCSPX') {
-                assetData = {
-                    symbol: 'bCSPX',
-                    name: 'Backed S&P 500 ETF',
-                    category: 'Tokenized Stocks',
-                    emoji: '📈',
-                    valueUsd: portfolio.tokenizedStocksValueUsd,
-                    percentage: portfolio.tokenizedStocksPercent,
-                    avgReturn: 10.2,
-                    riskLevel: 'Medium',
-                    description: 'bCSPX tracks the S&P 500 index.',
-                    features: [
-                        'Tracks S&P 500 index',
-                        '~10% average annual return',
-                        'Diversified across 500 companies',
-                        'Medium volatility',
-                        'Requires Tier 2 & KYC'
-                    ],
-                    requiresTier2: true
-                };
-            } else {
-                assetData = {
-                    symbol: 'PAXG',
-                    name: 'Paxos Gold',
-                    category: 'Tokenized Gold',
-                    emoji: '🥇',
-                    valueUsd: portfolio.tokenizedGoldValueUsd,
-                    percentage: portfolio.tokenizedGoldPercent,
-                    riskLevel: 'Low',
-                    description: 'PAXG is backed 1:1 by physical gold.',
-                    features: [
-                        'Backed by physical gold',
-                        'Tracks gold price (~5-8% annually)',
-                        'Inflation hedge',
-                        'Low volatility',
-                        'Redeemable for physical gold'
-                    ]
-                };
+            const holding = await holdingRepo.getByPortfolioAndSymbol(portfolio.id, assetSymbol);
+
+            if (!holding) {
+                return res.send(
+                    super.response(
+                        super._404,
+                        null,
+                        ['Asset holding not found']
+                    )
+                );
             }
+
+            const asset = await assetRegistry.getAssetBySymbol(assetSymbol);
+            const assetData = {
+                symbol: assetSymbol,
+                name: asset?.name || assetSymbol,
+                assetClassKey: holding.assetCategory,
+                valueUsd: Number(holding.valueUsd),
+                balance: Number(holding.balance),
+                riskLevel: asset?.metadata?.riskLevel || null,
+                description: asset?.metadata?.description || null,
+                features: asset?.metadata?.features || [],
+            };
 
             // Get asset transactions
             const assetTransactions = await transactionRepo.getByUserAndAsset(
                 userId,
-                PortfolioController.symbolToAssetType(symbol),
+                assetSymbol,
                 20
             );
 
@@ -349,7 +300,6 @@ class PortfolioController extends Controller {
 
             // Import rebalance service and token config
             const { rebalanceService } = await import('../services/rebalance.service');
-            const { getCategoryAsset } = await import('../configs/tokens.config');
             const { SwapRepository } = await import('../repositories/swap.repo');
             const { SWAP_EXECUTION_QUEUE } = await import('../configs/queue.config');
             const { v4: uuidv4 } = await import('uuid');
@@ -368,16 +318,15 @@ class PortfolioController extends Controller {
             };
 
             const currentBalances = {
-                USDC: Number(wallet.usdcBalance) || 0,
-                USDM: Number(wallet.stableYieldBalance) || 0,
-                BCSPX: Number(wallet.tokenizedStocksBalance) || 0,
-                PAXG: Number(wallet.tokenizedGoldBalance) || 0,
+                stableYields: Number(wallet.stableYieldBalance) || 0,
+                tokenizedStocks: Number(wallet.tokenizedStocksBalance) || 0,
+                tokenizedGold: Number(wallet.tokenizedGoldBalance) || 0,
             };
 
             const totalValueUsd = Number(portfolio.totalValueUsd);
 
             // Calculate required swaps
-            const rebalanceResult = rebalanceService.calculateRebalance({
+            const rebalanceResult = await rebalanceService.calculateRebalance({
                 currentAllocation,
                 targetAllocation,
                 totalValueUsd,
@@ -532,14 +481,6 @@ class PortfolioController extends Controller {
         return totalDrift > 5;
     }
 
-    /**
-     * Map symbol to AssetType enum
-     * @param symbol Asset symbol
-     * @returns AssetType
-     */
-    private static symbolToAssetType(symbol: string): any {
-        return symbol;
-    }
 }
 
 export default PortfolioController;

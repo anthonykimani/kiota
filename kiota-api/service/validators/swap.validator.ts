@@ -10,7 +10,7 @@ import { positiveAmountSchema } from './common.validator';
 /**
  * Asset type enum (for swaps)
  */
-export const swapAssetSchema = z.enum(['USDC', 'USDM', 'BCSPX', 'PAXG']);
+export const swapAssetSchema = z.string().min(2).max(20);
 
 const tokenAddressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid token address');
 

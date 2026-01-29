@@ -9,7 +9,7 @@ import {
   Index,
   Unique,
 } from 'typeorm';
-import { AssetType, PaymentMethod, TransactionStatus, TransactionType } from '../enums/Transaction';
+import { PaymentMethod, TransactionStatus, TransactionType } from '../enums/Transaction';
 import { User } from './user.entity';
 
 @Entity('transactions')
@@ -37,21 +37,21 @@ export class Transaction {
   status: TransactionStatus;
 
   // Source details (what user sent)
-  @Column({
-    type: 'enum',
-    enum: AssetType,
-  })
-  sourceAsset: AssetType;
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  sourceAsset: string | null; // Asset symbol (e.g., USDC, USDM, TSLAon)
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  sourceAssetClassKey: string | null; // stable_yields, tokenized_stocks, etc.
 
   @Column({ type: 'decimal', precision: 18, scale: 8 })
   sourceAmount: number;
 
   // Destination details (what user received)
-  @Column({
-    type: 'enum',
-    enum: AssetType,
-  })
-  destinationAsset: AssetType;
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  destinationAsset: string | null;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  destinationAssetClassKey: string | null;
 
   @Column({ type: 'decimal', precision: 18, scale: 8 })
   destinationAmount: number;
@@ -64,12 +64,11 @@ export class Transaction {
   @Column({ type: 'decimal', precision: 18, scale: 8, default: 0 })
   feeAmount: number;
 
-  @Column({
-    type: 'enum',
-    enum: AssetType,
-    nullable: true,
-  })
-  feeAsset: AssetType;
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  feeAsset: string | null;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  feeAssetClassKey: string | null;
 
   @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
   feeUsd: number;

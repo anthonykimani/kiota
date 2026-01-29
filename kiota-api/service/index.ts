@@ -6,6 +6,7 @@ import corsOptions from "./configs/corsconfig";
 import AppDataSource from "./configs/ormconfig";
 import { serverAdapter } from "./configs/bull-board.config";
 import { requireAdminAuth } from "./middleware/auth";
+import { bootstrapAssets } from "./services/asset-bootstrap.service";
 
 // Import routes
 import authRoutes from "./routes/index.auth";
@@ -77,8 +78,10 @@ app.get("/", (req, res) => {
 
 // Initialize database and start server
 AppDataSource.initialize()
-    .then(() => {
+    .then(async () => {
         console.log("Database initialized successfully");
+
+        await bootstrapAssets();
         
         if (require.main === module) {
             startServer();

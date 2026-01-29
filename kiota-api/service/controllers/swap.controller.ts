@@ -17,7 +17,7 @@ import Controller from './controller';
 import { SwapRepository } from '../repositories/swap.repo';
 import { WalletRepository } from '../repositories/wallet.repo';
 import { swapProvider } from '../services/swap-provider.factory';
-import { getTokenAddress, getTokenInfo, toWei, fromWei, AssetType as TokenAssetType } from '../configs/tokens.config';
+import { assetRegistry } from '../services/asset-registry.service';
 import { createLogger } from '../utils/logger.util';
 import { AuthenticatedRequest } from '../interfaces/IAuth';
 
@@ -96,8 +96,8 @@ class SwapController extends Controller {
    * Get swap pricing preview without executing
    *
    * Query params:
-   * - fromAsset: 'USDC' | 'USDM' | 'BCSPX' | 'PAXG'
-   * - toAsset: 'USDC' | 'USDM' | 'BCSPX' | 'PAXG'
+    * - fromAsset: asset symbol (e.g., USDC, USDM, BCSPX, TSLAon)
+    * - toAsset: asset symbol (e.g., USDC, USDM, BCSPX, TSLAon)
    * - amount: number (in token units, not wei)
    */
   public static async getSwapQuote(req: Request, res: Response) {
@@ -171,38 +171,55 @@ class SwapController extends Controller {
         );
       }
 
-      const fromAssetType = fromAsset as TokenAssetType;
-      const toAssetType = toAsset as TokenAssetType;
+      const fromAssetSymbol = String(fromAsset).toUpperCase();
+      const toAssetSymbol = String(toAsset).toUpperCase();
 
-      if (fromAssetType === toAssetType) {
+      if (fromAssetSymbol === toAssetSymbol) {
         return res.send(super.response(super._400, null, ['Cannot swap same asset']));
       }
 
-      const fromTokenInfo = getTokenInfo(fromAssetType, process.env.ONEINCH_NETWORK ?? "");
-      const toTokenInfo = getTokenInfo(toAssetType, process.env.ONEINCH_NETWORK ?? "");
-      const amountWei = toWei(amountNum, fromAssetType);
+      const fromAssetRecord = await assetRegistry.getAssetBySymbol(fromAssetSymbol);
+      const toAssetRecord = await assetRegistry.getAssetBySymbol(toAssetSymbol);
+
+      if (!fromAssetRecord || !toAssetRecord) {
+        return res.send(
+          super.response(super._400, null, ['Unsupported asset symbol'])
+        );
+      }
+
+      const fromDecimals = assetRegistry.resolveAssetDecimals(fromAssetRecord);
+      const toDecimals = assetRegistry.resolveAssetDecimals(toAssetRecord);
+      const fromTokenAddress = await assetRegistry.resolveAssetAddress(
+        fromAssetRecord,
+        process.env.ONEINCH_NETWORK ?? ''
+      );
+      const toTokenAddress = await assetRegistry.resolveAssetAddress(
+        toAssetRecord,
+        process.env.ONEINCH_NETWORK ?? ''
+      );
+      const amountWei = toWeiByDecimals(amountNum, fromDecimals);
 
       logger.info('Fetching swap quote', {
         userId,
-        fromAsset: fromAssetType,
-        toAsset: toAssetType,
+        fromAsset: fromAssetSymbol,
+        toAsset: toAssetSymbol,
         amount: amountNum,
       });
 
       const quote = await swapProvider.getQuote({
-        fromToken: fromTokenInfo.address,
-        toToken: toTokenInfo.address,
+        fromToken: fromTokenAddress,
+        toToken: toTokenAddress,
         amount: amountWei,
       });
 
-      const estimatedToAmount = fromWei(quote.toAmount, toAssetType);
+      const estimatedToAmount = fromWeiByDecimals(quote.toAmount, toDecimals);
 
       return res.send(
         super.response(super._200, {
-          fromAsset: fromAssetType,
-          toAsset: toAssetType,
-          fromToken: fromTokenInfo.address,
-          toToken: toTokenInfo.address,
+          fromAsset: fromAssetSymbol,
+          toAsset: toAssetSymbol,
+          fromToken: fromTokenAddress,
+          toToken: toTokenAddress,
           fromAmount: amountNum,
           estimatedToAmount,
           slippage: 1.0,
@@ -225,8 +242,8 @@ class SwapController extends Controller {
    * Execute user-initiated swap
    *
    * Body:
-   * - fromAsset: 'USDC' | 'USDM' | 'BCSPX' | 'PAXG'
-   * - toAsset: 'USDC' | 'USDM' | 'BCSPX' | 'PAXG'
+    * - fromAsset: asset symbol (e.g., USDC, USDM, BCSPX, TSLAon)
+    * - toAsset: asset symbol (e.g., USDC, USDM, BCSPX, TSLAon)
    * - amount: number
    * - slippage?: number (optional, defaults to 1%)
    */
@@ -245,12 +262,12 @@ class SwapController extends Controller {
         );
       }
 
-      const fromAssetType = fromAsset as TokenAssetType;
-      const toAssetType = toAsset as TokenAssetType;
+      const fromAssetSymbol = String(fromAsset).toUpperCase();
+      const toAssetSymbol = String(toAsset).toUpperCase();
       const amountNum = Number(amount);
       const slippageNum = Number(slippage);
 
-      if (fromAssetType === toAssetType) {
+      if (fromAssetSymbol === toAssetSymbol) {
         return res.send(super.response(super._400, null, ['Cannot swap same asset']));
       }
 
@@ -261,10 +278,18 @@ class SwapController extends Controller {
         );
       }
 
-      // Get quote for estimated output
-      const fromTokenInfo = getTokenInfo(fromAssetType, process.env.ONEINCH_NETWORK ?? "");
-      const toTokenInfo = getTokenInfo(toAssetType, process.env.ONEINCH_NETWORK ?? "");
-      const amountWei = toWei(amountNum, fromAssetType);
+      const fromAssetRecord = await assetRegistry.getAssetBySymbol(fromAssetSymbol);
+      const toAssetRecord = await assetRegistry.getAssetBySymbol(toAssetSymbol);
+
+      if (!fromAssetRecord || !toAssetRecord) {
+        return res.send(
+          super.response(super._400, null, ['Unsupported asset symbol'])
+        );
+      }
+
+      const fromDecimals = assetRegistry.resolveAssetDecimals(fromAssetRecord);
+      const toDecimals = assetRegistry.resolveAssetDecimals(toAssetRecord);
+      const amountWei = toWeiByDecimals(amountNum, fromDecimals);
 
       // Pre-swap on-chain balance check
       const walletRepo = new WalletRepository();
@@ -281,7 +306,7 @@ class SwapController extends Controller {
         return res.send(super.response(super._400, null, [`Unsupported network: ${network}`]));
       }
 
-      const fromTokenAddress = getTokenAddress(fromAssetType, network);
+      const fromTokenAddress = await assetRegistry.resolveAssetAddress(fromAssetRecord, network);
       const onchainBalance = await publicClient.readContract({
         address: fromTokenAddress as `0x${string}`,
         abi: ERC20_ABI,
@@ -291,33 +316,34 @@ class SwapController extends Controller {
 
       if (BigInt(onchainBalance) < BigInt(amountWei)) {
         return res.send(
-          super.response(super._400, null, [`Insufficient ${fromAssetType} balance`])
+          super.response(super._400, null, [`Insufficient ${fromAssetSymbol} balance`])
         );
       }
 
       logger.info('Getting quote for swap execution', {
         userId,
-        fromAsset: fromAssetType,
-        toAsset: toAssetType,
+        fromAsset: fromAssetSymbol,
+        toAsset: toAssetSymbol,
         amount: amountNum,
         slippage: slippageNum,
       });
 
+      const toTokenAddress = await assetRegistry.resolveAssetAddress(toAssetRecord, network);
       const quote = await swapProvider.getQuote({
-        fromToken: fromTokenInfo.address,
-        toToken: toTokenInfo.address,
+        fromToken: fromTokenAddress,
+        toToken: toTokenAddress,
         amount: amountWei,
         slippage: slippageNum,
       });
 
-      const estimatedToAmount = fromWei(quote.toAmount, toAssetType);
+      const estimatedToAmount = fromWeiByDecimals(quote.toAmount, toDecimals);
 
       // Create swap transaction record
       const swapRepo = new SwapRepository();
       const transaction = await swapRepo.createSwap({
         userId,
-        fromAsset: fromAssetType,
-        toAsset: toAssetType,
+        fromAsset: fromAssetSymbol,
+        toAsset: toAssetSymbol,
         fromAmount: amountNum,
         estimatedToAmount,
         slippage: slippageNum,
@@ -337,8 +363,8 @@ class SwapController extends Controller {
         {
           transactionId: transaction.id,
           userId,
-          fromAsset: fromAssetType,
-          toAsset: toAssetType,
+          fromAsset: fromAssetSymbol,
+          toAsset: toAssetSymbol,
           amount: amountNum,
           slippage: slippageNum,
         },
@@ -360,8 +386,8 @@ class SwapController extends Controller {
         super.response(super._201, {
           transactionId: transaction.id,
           status: 'pending',
-          fromAsset: fromAssetType,
-          toAsset: toAssetType,
+          fromAsset: fromAssetSymbol,
+          toAsset: toAssetSymbol,
           fromAmount: amountNum,
           estimatedToAmount,
           estimatedCompletionTime: '2-5 minutes',

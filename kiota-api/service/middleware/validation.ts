@@ -135,8 +135,8 @@ export const acceptStrategySchema = z.object({
  * Swap quote schema
  */
 export const swapQuoteSchema = z.object({
-  fromAsset: z.enum(['USDC', 'USDM', 'BCSPX', 'PAXG']),
-  toAsset: z.enum(['USDC', 'USDM', 'BCSPX', 'PAXG']),
+  fromAsset: z.string().min(2).max(20),
+  toAsset: z.string().min(2).max(20),
   amount: z.number().positive('Amount must be positive'),
   slippage: z.number().min(0.1).max(5.0).optional()
 });
@@ -145,8 +145,8 @@ export const swapQuoteSchema = z.object({
  * Swap execution schema
  */
 export const swapExecuteSchema = z.object({
-  fromAsset: z.enum(['USDC', 'USDM', 'BCSPX', 'PAXG']),
-  toAsset: z.enum(['USDC', 'USDM', 'BCSPX', 'PAXG']),
+  fromAsset: z.string().min(2).max(20),
+  toAsset: z.string().min(2).max(20),
   amount: z.number().positive('Amount must be positive'),
   slippage: z.number().min(0.1).max(5.0).optional(),
   minReturn: z.number().positive().optional()

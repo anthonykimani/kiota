@@ -16,7 +16,7 @@
  * 4. Filter out swaps < $1 (ignore dust)
  */
 
-import { AssetType as TokenAssetType, getCategoryAsset } from '../configs/tokens.config';
+import { assetRegistry } from '../services/asset-registry.service';
 import { createLogger } from '../utils/logger.util';
 
 const logger = createLogger('rebalance-service');
@@ -34,18 +34,17 @@ export interface Allocation {
  * Current balances (USD values)
  */
 export interface Balances {
-  USDC: number;
-  USDM: number;
-  BCSPX: number;
-  PAXG: number;
+  stableYields: number;
+  tokenizedStocks: number;
+  tokenizedGold: number;
 }
 
 /**
  * Swap instruction
  */
 export interface SwapInstruction {
-  fromAsset: TokenAssetType;
-  toAsset: TokenAssetType;
+  fromAsset: string;
+  toAsset: string;
   fromAmount: number; // USD amount to swap
 }
 
@@ -88,12 +87,12 @@ class RebalanceService {
   /**
    * Calculate required swaps to reach target allocation
    */
-  calculateRequiredSwaps(params: {
+  async calculateRequiredSwaps(params: {
     currentAllocation: Allocation;
     targetAllocation: Allocation;
     totalValueUsd: number;
     currentBalances: Balances;
-  }): SwapInstruction[] {
+  }): Promise<SwapInstruction[]> {
     const { currentAllocation, targetAllocation, totalValueUsd, currentBalances } = params;
 
     logger.info('Calculating required swaps', {
@@ -121,19 +120,27 @@ class RebalanceService {
     logger.debug('Category value differences calculated', { categoryDiffs });
 
     // Separate into over-allocated (negative diff) and under-allocated (positive diff)
-    const overAllocated: Array<{ category: string; asset: TokenAssetType; excess: number }> = [];
-    const underAllocated: Array<{ category: string; asset: TokenAssetType; deficit: number }> = [];
+    const overAllocated: Array<{ category: string; asset: string; classKey: keyof Balances; excess: number }> = [];
+    const underAllocated: Array<{ category: string; asset: string; classKey: keyof Balances; deficit: number }> = [];
 
     for (const [category, diff] of Object.entries(categoryDiffs)) {
-      const asset = getCategoryAsset(
+      const classKey = this.mapAllocationKeyToClassKey(
         category as 'stableYields' | 'tokenizedStocks' | 'tokenizedGold'
       );
+      const primaryAsset = await assetRegistry.getPrimaryAssetByClassKey(classKey);
+
+      if (!primaryAsset) {
+        continue;
+      }
+
+      const asset = primaryAsset.symbol;
 
       if (diff < -1) {
         // Over-allocated by more than $1
         overAllocated.push({
           category,
           asset,
+          classKey: this.mapAllocationKeyToBalanceKey(category as keyof Allocation),
           excess: Math.abs(diff),
         });
       } else if (diff > 1) {
@@ -141,6 +148,7 @@ class RebalanceService {
         underAllocated.push({
           category,
           asset,
+          classKey: this.mapAllocationKeyToBalanceKey(category as keyof Allocation),
           deficit: diff,
         });
       }
@@ -178,7 +186,7 @@ class RebalanceService {
         const swapAmount = Math.min(remaining, under.deficit);
 
         // Verify user has sufficient balance
-        const availableBalance = currentBalances[over.asset];
+        const availableBalance = currentBalances[over.classKey] ?? 0;
         if (availableBalance < swapAmount) {
           logger.warn('Insufficient balance for swap', {
             fromAsset: over.asset,
@@ -249,18 +257,18 @@ class RebalanceService {
    *
    * Combines drift detection and swap calculation
    */
-  calculateRebalance(params: {
+  async calculateRebalance(params: {
     currentAllocation: Allocation;
     targetAllocation: Allocation;
     totalValueUsd: number;
     currentBalances: Balances;
-  }): RebalanceResult {
+  }): Promise<RebalanceResult> {
     const { currentAllocation, targetAllocation, totalValueUsd, currentBalances } = params;
 
     const needsRebalance = this.needsRebalance(currentAllocation, targetAllocation);
 
     const swaps = needsRebalance
-      ? this.calculateRequiredSwaps({
+      ? await this.calculateRequiredSwaps({
           currentAllocation,
           targetAllocation,
           totalValueUsd,
@@ -308,6 +316,30 @@ class RebalanceService {
       tokenizedStocks: (balances.tokenizedStocks / total) * 100,
       tokenizedGold: (balances.tokenizedGold / total) * 100,
     };
+  }
+
+  private mapAllocationKeyToClassKey(
+    key: 'stableYields' | 'tokenizedStocks' | 'tokenizedGold'
+  ): 'stable_yields' | 'tokenized_stocks' | 'tokenized_gold' {
+    const mapping = {
+      stableYields: 'stable_yields',
+      tokenizedStocks: 'tokenized_stocks',
+      tokenizedGold: 'tokenized_gold',
+    } as const;
+
+    return mapping[key];
+  }
+
+  private mapAllocationKeyToBalanceKey(
+    key: keyof Allocation
+  ): keyof Balances {
+    const mapping: Record<keyof Allocation, keyof Balances> = {
+      stableYields: 'stableYields',
+      tokenizedStocks: 'tokenizedStocks',
+      tokenizedGold: 'tokenizedGold',
+    };
+
+    return mapping[key];
   }
 }
 
