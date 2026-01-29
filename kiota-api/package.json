@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "NODE_ENV=development nodemon -w './**/*.ts' --exec 'ts-node' service/index.ts",
+    "prod": "NODE_ENV=production nodemon -w './**/*.ts' --exec 'ts-node' service/index.ts",
     "worker": "NODE_ENV=development ts-node service/jobs/worker.ts",
     "test": "NODE_ENV=test jest",
     "test:watch": "NODE_ENV=test jest --watch",

@@ -35,7 +35,7 @@ const logger = createLogger('fusion-swap-provider');
 const ONEINCH_API_KEY = process.env.ONEINCH_API_KEY??"";
 const SWAP_WALLET_PRIVATE_KEY = process.env.SWAP_WALLET_PRIVATE_KEY || '';
 const NODE_URL = process.env.NODE_URL || 'https://eth.llamarpc.com';
-const FUSION_SIGNER_MODE = (process.env.ONEINCH_FUSION_SIGNER || 'private_key') as FusionSignerMode;
+const FUSION_SIGNER_MODE = (process.env.ONEINCH_FUSION_SIGNER || 'privy') as FusionSignerMode;
 
 class PrivyProviderConnector {
   private rpcProvider: JsonRpcProvider;
@@ -124,7 +124,7 @@ export class FusionSwapProvider implements ISwapProvider {
 
     // Initialize Fusion SDK
     this.sdk = new FusionSDK({
-      url: 'https://api.1inch.dev/fusion',
+      url: 'https://api.1inch.com/fusion',
       network: NetworkEnum.ETHEREUM, // Ethereum mainnet = 1
       blockchainProvider: connector,
       authKey: ONEINCH_API_KEY
@@ -134,7 +134,7 @@ export class FusionSwapProvider implements ISwapProvider {
 
     logger.info('Fusion SDK initialized', {
       network: 'ethereum (1)',
-      url: 'https://api.1inch.dev/fusion',
+      url: 'https://api.1inch.com/fusion',
       signerMode: this.signerMode,
     });
   }
@@ -147,7 +147,7 @@ export class FusionSwapProvider implements ISwapProvider {
       throw new Error('Fusion SDK not initialized');
     }
 
-    const { fromToken, toToken, amount } = params;
+    const { fromToken, toToken, amount, walletAddress } = params;
 
     logger.info('Fetching Fusion quote', {
       fromToken: fromToken.substring(0, 10) + '...',
@@ -160,6 +160,8 @@ export class FusionSwapProvider implements ISwapProvider {
         fromTokenAddress: fromToken,
         toTokenAddress: toToken,
         amount: amount,
+        walletAddress,
+        enableEstimate: true,
       });
 
       logger.info('Fusion quote fetched successfully', {

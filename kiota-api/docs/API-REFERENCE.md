@@ -732,14 +732,21 @@ GET /swap/quote
 
 **Headers:** `Authorization: Bearer <token>`
 
-**Query Parameters:**
+**Query Parameters (asset symbols):**
 - `fromAsset`: Token symbol for the asset class (example: `USDM`, `BCSPX`, `PAXG`, `USDC`)
 - `toAsset`: Token symbol for the asset class (example: `USDM`, `BCSPX`, `PAXG`, `USDC`)
+- `amount`: Amount in token units
+
+**Query Parameters (token addresses):**
+- `fromToken`: ERC-20 address (example: `0xdAC17F...`)
+- `toToken`: ERC-20 address (example: `0xC02aaA...`)
 - `amount`: Amount in token units
 
 **Example:**
 ```
 GET /swap/quote?fromAsset=USDC&toAsset=USDM&amount=100
+
+GET /swap/quote?fromToken=0xdAC17F958D2ee523a2206206994597C13D831ec7&toToken=0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2&amount=8
 ```
 
 **Response:**
@@ -757,11 +764,16 @@ GET /swap/quote?fromAsset=USDC&toAsset=USDM&amount=100
       "network": 0,
       "protocol": 0.20
     },
-    "route": ["1inch Router"],
-    "expiresAt": "2025-01-20T12:05:00Z"
+    "expiresAt": "2025-01-20T12:05:00Z",
+    "provider": "Fusion SDK",
+    "quote": {}
   }
 }
 ```
+
+**Notes:**
+- Fusion quotes require `walletAddress` internally; it is derived from the authenticated user.
+- Fusion may reject small amounts depending on the pair (e.g., USDT→WETH < 8 USDT).
 
 ---
 
