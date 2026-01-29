@@ -9,7 +9,6 @@ import { requireAdminAuth } from "./middleware/auth";
 import { bootstrapAssets } from "./services/asset-bootstrap.service";
 
 // Import routes
-import authRoutes from "./routes/index.auth";
 import quizRoutes from "./routes/index.quiz";
 import walletRoutes from "./routes/index.wallet";
 import dashboardRoutes from "./routes/index.dashboard";
@@ -38,14 +37,13 @@ app.use(express.json());
 app.use('/admin/queues', requireAdminAuth, serverAdapter.getRouter());
 
 // Routes
-app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/auth", privyRoutes);
 app.use("/api/v1/quiz", quizRoutes);
 app.use("/api/v1/wallet", walletRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
 app.use("/api/v1/deposit", depositRoutes);
 app.use("/api/v1/portfolio", portfolioRoutes);
 app.use("/api/v1/swap", swapRoutes);
-app.use("/api/v1/auth/privy", privyRoutes);
 app.use("/api/v1/goals", goalRoutes);
 
 // Health check endpoint
@@ -70,7 +68,6 @@ app.get("/", (req, res) => {
             deposit: "/api/v1/deposit",
             portfolio: "/api/v1/portfolio",
             swap: "/api/v1/swap",
-            privy: "/api/v1/auth/privy",
             goals: "/api/v1/goals"
         }
     });
@@ -107,9 +104,9 @@ async function startServer() {
         console.log(`🔌 WebSocket: Enabled`);
         console.log("═".repeat(50));
         console.log("\n📋 Available Routes:");
-        console.log(`   • POST   /api/v1/auth/request-otp`);
-        console.log(`   • POST   /api/v1/auth/verify-otp`);
-        console.log(`   • POST   /api/v1/auth/google-login`);
+        console.log(`   • POST   /api/v1/auth/sync`);
+        console.log(`   • POST   /api/v1/auth/verify`);
+        console.log(`   • GET    /api/v1/auth/me`);
         console.log(`   • POST   /api/v1/quiz/submit`);
         console.log(`   • POST   /api/v1/quiz/accept-strategy`);
         console.log(`   • POST   /api/v1/wallet/create`);

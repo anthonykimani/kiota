@@ -34,7 +34,7 @@ Authorization: Bearer <jwt_token>
 Sync user from Privy to database. Called after Privy login.
 
 ```
-POST /auth/privy/sync
+POST /auth/sync
 ```
 
 **Request Body:**
@@ -82,7 +82,7 @@ POST /auth/privy/sync
 Get authenticated user's profile.
 
 ```
-GET /auth/privy/me
+GET /auth/me
 ```
 
 **Headers:** `Authorization: Bearer <token>`
@@ -112,25 +112,6 @@ GET /auth/privy/me
       "totalValueUsd": 500.00
     }
   }
-}
-```
-
----
-
-### Google Sign In (Legacy)
-
-Sign in with Google OAuth.
-
-```
-POST /auth/google-login
-```
-
-**Request Body:**
-```json
-{
-  "googleId": "google_user_id",
-  "email": "user@gmail.com",
-  "phoneNumber": "+254712345678"
 }
 ```
 
@@ -1189,8 +1170,7 @@ GET /
     "deposit": "/api/v1/deposit",
     "portfolio": "/api/v1/portfolio",
     "swap": "/api/v1/swap",
-    "goals": "/api/v1/goals",
-    "privy": "/api/v1/auth/privy"
+    "goals": "/api/v1/goals"
   }
 }
 ```

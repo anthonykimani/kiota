@@ -123,11 +123,14 @@ export async function processSwapConfirmation(
         throw new Error('Swap transaction missing source or destination asset');
       }
 
+      const sourceAsset = transaction.sourceAsset;
+      const destinationAsset = transaction.destinationAsset;
+
       await contextLogger.withTiming('Update balances atomically', async () => {
         await balanceUpdaterService.updateAfterSwap({
           userId: transaction.userId,
-          fromAsset: transaction.sourceAsset,
-          toAsset: transaction.destinationAsset,
+          fromAsset: sourceAsset,
+          toAsset: destinationAsset,
           fromAmount: Number(transaction.sourceAmount),
           toAmount: actualToAmount,
           transactionId: transaction.id,

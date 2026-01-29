@@ -56,7 +56,7 @@ function PrivyTokenTester() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${apiUrl}/auth/privy/sync`, {
+      const response = await fetch(`${apiUrl}/auth/sync`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -88,7 +88,7 @@ function PrivyTokenTester() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${apiUrl}/auth/privy/verify`, {
+      const response = await fetch(`${apiUrl}/auth/verify`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -227,7 +227,7 @@ function PrivyTokenTester() {
         <div className="card">
           <h3>🎫 Identity Token</h3>
           <p className="card-description">
-            Use this token for <code>POST /auth/privy/sync</code>
+            Use this token for <code>POST /auth/sync</code>
           </p>
           <div className="token-box">
             <code className="token-text">{idToken}</code>
@@ -257,7 +257,7 @@ function PrivyTokenTester() {
         <div className="card">
           <h3>🔑 Access Token</h3>
           <p className="card-description">
-            Use this token for <code>POST /auth/privy/verify</code>
+            Use this token for <code>POST /auth/verify</code>
           </p>
           <div className="token-box">
             <code className="token-text">{accessToken}</code>
@@ -303,14 +303,14 @@ function PrivyTokenTester() {
             onClick={testSyncEndpoint}
             disabled={loading || !idToken}
           >
-            🚀 Test POST /auth/privy/sync
+            🚀 Test POST /auth/sync
           </button>
           <button
             className="btn btn-primary"
             onClick={testVerifyEndpoint}
             disabled={loading || !accessToken}
           >
-            ✅ Test POST /auth/privy/verify
+            ✅ Test POST /auth/verify
           </button>
         </div>
 
