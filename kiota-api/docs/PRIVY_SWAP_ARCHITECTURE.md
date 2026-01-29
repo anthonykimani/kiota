@@ -226,7 +226,7 @@ NODE_URL="https://ethereum-sepolia-rpc.publicnode.com"  # For reading blockchain
 ### 1. Create Test User with Privy Wallet
 
 ```bash
-curl -X POST "http://localhost:3003/api/auth/privy/server-create" \
+curl -X POST "http://localhost:3003/api/v1/auth/server-create" \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com"}'
 ```

@@ -153,17 +153,6 @@ export const swapExecuteSchema = z.object({
 });
 
 /**
- * Google sign in schema
- */
-export const googleSignInSchema = z.object({
-  googleId: z.string().min(1, 'Google ID is required'),
-  email: z.string().email('Invalid email format'),
-  phoneNumber: z.string()
-    .regex(/^\+254\d{9}$/, 'Invalid phone number format')
-    .optional()
-});
-
-/**
  * Privy sync schema
  */
 export const privySyncSchema = z.object({

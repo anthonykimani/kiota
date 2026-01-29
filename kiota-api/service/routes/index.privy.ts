@@ -5,7 +5,7 @@ import { requireInternalAuth } from '../middleware/auth';
 const router: Router = Router();
 
 /**
- * POST /auth/privy/sync
+ * POST /auth/sync
  * Sync user from Privy to our database
  * Called after frontend successfully authenticates with Privy
  * 
@@ -14,7 +14,7 @@ const router: Router = Router();
 router.post('/sync', PrivyAuthController.syncUser);
 
 /**
- * POST /auth/privy/verify
+ * POST /auth/verify
  * Verify Privy access token
  * 
  * Headers: Authorization: Bearer <accessToken>
@@ -22,7 +22,7 @@ router.post('/sync', PrivyAuthController.syncUser);
 router.post('/verify', PrivyAuthController.verifyToken);
 
 /**
- * POST /auth/privy/server-create
+ * POST /auth/server-create
  * Create user from server side
  * For admin/bulk operations only
  * 
@@ -31,7 +31,7 @@ router.post('/verify', PrivyAuthController.verifyToken);
 router.post('/server-create', PrivyAuthController.createServerUser);
 
 /**
- * GET /auth/privy/me
+ * GET /auth/me
  * Get current authenticated user
  * 
  * Note: Add auth middleware here when you create it
@@ -39,7 +39,7 @@ router.post('/server-create', PrivyAuthController.createServerUser);
 router.get('/me', requireInternalAuth, PrivyAuthController.getCurrentUser);
 
 /**
- * POST /auth/privy/refresh
+ * POST /auth/refresh
  * Refresh user data from Privy
  * 
  * Body: { idToken: string }

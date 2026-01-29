@@ -158,7 +158,7 @@ export AUTH="Authorization: Bearer <your_token>"
 curl http://localhost:3003/health
 
 # Get current user
-curl -H "$AUTH" http://localhost:3003/api/v1/auth/privy/me
+curl -H "$AUTH" http://localhost:3003/api/v1/auth/me
 
 # Get dashboard
 curl -H "$AUTH" http://localhost:3003/api/v1/dashboard
