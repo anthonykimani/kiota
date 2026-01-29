@@ -124,6 +124,23 @@ export class PrivyService {
         }
     }
 
+    async signTypedData(walletId: string, typedData: any) {
+        try {
+            const response = await this.client.wallets().ethereum().signTypedData(walletId, {
+                params: {
+                    typed_data: typedData
+                }
+            });
+
+            return { success: true, signature: response.signature };
+        } catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Failed to sign typed data'
+            };
+        }
+    }
+
     extractPrimaryAuth(privyUser: any): { method: AuthMethod; phoneNumber?: string; email?: string; } {
         const phoneAccount = privyUser.linked_accounts.find((acc: any) => acc.type === 'phone');
         if (phoneAccount) return { method: AuthMethod.PHONE, phoneNumber: phoneAccount.number };

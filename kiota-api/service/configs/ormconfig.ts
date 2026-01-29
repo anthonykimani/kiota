@@ -12,6 +12,8 @@ import { Lesson } from "../models/lesson.entity";
 import { LessonProgress } from "../models/lesson-progress.entity";
 import { LearningModule } from "../models/learning-module.entity";
 import { LearningTrack } from "../models/learning-track.entity";
+import { AssetClass } from "../models/asset-class.entity";
+import { Asset } from "../models/asset.entity";
 import { Goal } from "../models/goal.entity";
 import { GoalContribution } from "../models/goal-contribution.entity";
 import { GoalMilestone } from "../models/goal-milestone.entity";
@@ -55,6 +57,8 @@ const AppDataSource = new DataSource({
         //cert: "",
     } : config.ssl,
     entities: [
+        AssetClass,
+        Asset,
         AIAdvisorSession,
         AutoSaveExecution,
         AutoSaveRule,

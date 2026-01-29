@@ -18,8 +18,9 @@ import AppDataSource from '../configs/ormconfig';
 import { Portfolio } from '../models/portfolio.entity';
 import { Wallet } from '../models/wallet.entity';
 import { Transaction } from '../models/transaction.entity';
+import { PortfolioHolding } from '../models/portfolio-holding.entity';
 import { TransactionStatus } from '../enums/Transaction';
-import { AssetType as TokenAssetType, getAssetCategory } from '../configs/tokens.config';
+import { assetRegistry } from '../services/asset-registry.service';
 import { createLogger } from '../utils/logger.util';
 
 const logger = createLogger('balance-updater-service');
@@ -29,8 +30,8 @@ const logger = createLogger('balance-updater-service');
  */
 export interface UpdateAfterSwapParams {
   userId: string;
-  fromAsset: TokenAssetType;
-  toAsset: TokenAssetType;
+  fromAsset: string;
+  toAsset: string;
   fromAmount: number; // Amount sent
   toAmount: number; // Amount received
   transactionId: string;
@@ -42,8 +43,8 @@ export interface UpdateAfterSwapParams {
 export interface UpdateAfterMultiSwapParams {
   userId: string;
   swaps: Array<{
-    fromAsset: TokenAssetType;
-    toAsset: TokenAssetType;
+    fromAsset: string;
+    toAsset: string;
     fromAmount: number;
     toAmount: number;
     transactionId: string;
@@ -59,6 +60,9 @@ class BalanceUpdaterService {
   async updateAfterSwap(params: UpdateAfterSwapParams): Promise<void> {
     const { userId, fromAsset, toAsset, fromAmount, toAmount, transactionId } = params;
 
+    const fromClassKey = await assetRegistry.getAssetClassKeyBySymbol(fromAsset);
+    const toClassKey = await assetRegistry.getAssetClassKeyBySymbol(toAsset);
+
     logger.info('Starting atomic balance update after swap', {
       userId,
       fromAsset,
@@ -73,6 +77,7 @@ class BalanceUpdaterService {
       const portfolioRepo = manager.getRepository(Portfolio);
       const walletRepo = manager.getRepository(Wallet);
       const txRepo = manager.getRepository(Transaction);
+      const holdingRepo = manager.getRepository(PortfolioHolding);
 
       // Fetch current state
       const portfolio = await portfolioRepo.findOne({ where: { userId } });
@@ -96,7 +101,7 @@ class BalanceUpdaterService {
       const portfolioUpdates: Partial<Portfolio> = {};
 
       // Decrement source asset
-      const fromCategory = getAssetCategory(fromAsset);
+      const fromCategory = this.normalizeClassKey(fromClassKey);
       if (fromCategory) {
         const fromField = this.getCategoryField(fromCategory);
         (portfolioUpdates as any)[fromField] = Number(portfolio[fromField]) - fromAmount;
@@ -109,7 +114,7 @@ class BalanceUpdaterService {
       }
 
       // Increment destination asset
-      const toCategory = getAssetCategory(toAsset);
+      const toCategory = this.normalizeClassKey(toClassKey);
       if (toCategory) {
         const toField = this.getCategoryField(toCategory);
         (portfolioUpdates as any)[toField] =
@@ -196,6 +201,58 @@ class BalanceUpdaterService {
       // Update wallet
       await walletRepo.update({ userId }, walletUpdates);
 
+      if (portfolio) {
+        if (fromAsset) {
+          const existingFrom = await holdingRepo.findOne({
+            where: { portfolioId: portfolio.id, assetSymbol: fromAsset },
+          });
+
+          const fromHolding = existingFrom
+            ? Object.assign(existingFrom, {
+                assetCategory: fromClassKey ?? existingFrom.assetCategory,
+                balance: Number(existingFrom.balance) - fromAmount,
+                valueUsd: Number(existingFrom.valueUsd) - fromAmount,
+                lastUpdated: new Date(),
+              })
+            : holdingRepo.create({
+                portfolioId: portfolio.id,
+                assetSymbol: fromAsset,
+                assetCategory: fromClassKey ?? 'unknown',
+                balance: -fromAmount,
+                valueUsd: -fromAmount,
+                costBasisUsd: 0,
+                lastUpdated: new Date(),
+              });
+
+          await holdingRepo.save(fromHolding);
+        }
+
+        if (toAsset) {
+          const existingTo = await holdingRepo.findOne({
+            where: { portfolioId: portfolio.id, assetSymbol: toAsset },
+          });
+
+          const toHolding = existingTo
+            ? Object.assign(existingTo, {
+                assetCategory: toClassKey ?? existingTo.assetCategory,
+                balance: Number(existingTo.balance) + toAmount,
+                valueUsd: Number(existingTo.valueUsd) + toAmount,
+                lastUpdated: new Date(),
+              })
+            : holdingRepo.create({
+                portfolioId: portfolio.id,
+                assetSymbol: toAsset,
+                assetCategory: toClassKey ?? 'unknown',
+                balance: toAmount,
+                valueUsd: toAmount,
+                costBasisUsd: 0,
+                lastUpdated: new Date(),
+              });
+
+          await holdingRepo.save(toHolding);
+        }
+      }
+
       // Mark transaction as completed
       await txRepo.update(
         { id: transactionId },
@@ -238,6 +295,7 @@ class BalanceUpdaterService {
       const portfolioRepo = manager.getRepository(Portfolio);
       const walletRepo = manager.getRepository(Wallet);
       const txRepo = manager.getRepository(Transaction);
+      const holdingRepo = manager.getRepository(PortfolioHolding);
 
       // Fetch current state
       const portfolio = await portfolioRepo.findOne({ where: { userId } });
@@ -277,8 +335,10 @@ class BalanceUpdaterService {
         });
 
         // Update category values
-        const fromCategory = getAssetCategory(fromAsset);
-        const toCategory = getAssetCategory(toAsset);
+        const fromClassKey = await assetRegistry.getAssetClassKeyBySymbol(fromAsset);
+        const toClassKey = await assetRegistry.getAssetClassKeyBySymbol(toAsset);
+        const fromCategory = this.normalizeClassKey(fromClassKey);
+        const toCategory = this.normalizeClassKey(toClassKey);
 
         if (fromCategory) {
           portfolioChanges[fromCategory] -= fromAmount;
@@ -288,6 +348,58 @@ class BalanceUpdaterService {
         if (toCategory) {
           portfolioChanges[toCategory] += toAmount;
           walletChanges[this.getBalanceFieldSimple(toCategory)] += toAmount;
+        }
+
+        if (portfolio) {
+          if (fromAsset) {
+            const existingFrom = await holdingRepo.findOne({
+              where: { portfolioId: portfolio.id, assetSymbol: fromAsset },
+            });
+
+            const fromHolding = existingFrom
+              ? Object.assign(existingFrom, {
+                  assetCategory: fromClassKey ?? existingFrom.assetCategory,
+                  balance: Number(existingFrom.balance) - fromAmount,
+                  valueUsd: Number(existingFrom.valueUsd) - fromAmount,
+                  lastUpdated: new Date(),
+                })
+              : holdingRepo.create({
+                  portfolioId: portfolio.id,
+                  assetSymbol: fromAsset,
+                  assetCategory: fromClassKey ?? 'unknown',
+                  balance: -fromAmount,
+                  valueUsd: -fromAmount,
+                  costBasisUsd: 0,
+                  lastUpdated: new Date(),
+                });
+
+            await holdingRepo.save(fromHolding);
+          }
+
+          if (toAsset) {
+            const existingTo = await holdingRepo.findOne({
+              where: { portfolioId: portfolio.id, assetSymbol: toAsset },
+            });
+
+            const toHolding = existingTo
+              ? Object.assign(existingTo, {
+                  assetCategory: toClassKey ?? existingTo.assetCategory,
+                  balance: Number(existingTo.balance) + toAmount,
+                  valueUsd: Number(existingTo.valueUsd) + toAmount,
+                  lastUpdated: new Date(),
+                })
+              : holdingRepo.create({
+                  portfolioId: portfolio.id,
+                  assetSymbol: toAsset,
+                  assetCategory: toClassKey ?? 'unknown',
+                  balance: toAmount,
+                  valueUsd: toAmount,
+                  costBasisUsd: 0,
+                  lastUpdated: new Date(),
+                });
+
+            await holdingRepo.save(toHolding);
+          }
         }
 
         // Mark transaction as completed
@@ -400,6 +512,25 @@ class BalanceUpdaterService {
       tokenizedGold: 'tokenizedGoldBalance' as const,
     };
     return mapping[category];
+  }
+
+  private normalizeClassKey(
+    classKey: string | null
+  ): 'stableYields' | 'tokenizedStocks' | 'tokenizedGold' | null {
+    if (!classKey) {
+      return null;
+    }
+
+    const mapping: Record<string, 'stableYields' | 'tokenizedStocks' | 'tokenizedGold'> = {
+      stable_yields: 'stableYields',
+      tokenized_stocks: 'tokenizedStocks',
+      tokenized_gold: 'tokenizedGold',
+      stableYields: 'stableYields',
+      tokenizedStocks: 'tokenizedStocks',
+      tokenizedGold: 'tokenizedGold',
+    };
+
+    return mapping[classKey] ?? null;
   }
 }
 

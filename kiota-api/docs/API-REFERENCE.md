@@ -9,6 +9,8 @@ Complete REST API documentation for the Kiota wealth management platform.
 Authorization: Bearer <jwt_token>
 ```
 
+**Asset Classes:** The product is organized around asset classes (stable yields, tokenized stocks, tokenized gold). Token symbols shown in examples (USDM, bCSPX, PAXG) are current implementation details and may change.
+
 ---
 
 ## Table of Contents
@@ -138,7 +140,7 @@ POST /auth/google-login
 
 ### Submit Quiz
 
-Submit investment quiz answers and get AI-generated strategy.
+Submit investment quiz answers and get an AI-generated strategy.
 
 ```
 POST /quiz/submit
@@ -187,6 +189,8 @@ POST /quiz/submit
   }
 }
 ```
+
+Allocation is defined at the asset class level. The `assets` field shows the current token implementations for each class.
 
 ---
 
@@ -360,6 +364,8 @@ GET /dashboard
 }
 ```
 
+Portfolio allocations are expressed by asset class, with token symbols shown as current implementations.
+
 ---
 
 ## Deposits
@@ -453,7 +459,7 @@ POST /deposit/intent/confirm
 
 ### Convert Deposit
 
-Convert deposited USDC to target allocation assets.
+Convert deposited USDC to target asset class allocations.
 
 ```
 POST /deposit/convert
@@ -696,6 +702,8 @@ GET /portfolio/detail
 }
 ```
 
+Holdings are grouped by asset class and mapped to the current token used for that class.
+
 ---
 
 ### Rebalance Portfolio
@@ -744,8 +752,8 @@ GET /swap/quote
 **Headers:** `Authorization: Bearer <token>`
 
 **Query Parameters:**
-- `fromAsset`: `USDC`, `USDM`, `BCSPX`, `PAXG`
-- `toAsset`: `USDC`, `USDM`, `BCSPX`, `PAXG`
+- `fromAsset`: Token symbol for the asset class (example: `USDM`, `BCSPX`, `PAXG`, `USDC`)
+- `toAsset`: Token symbol for the asset class (example: `USDM`, `BCSPX`, `PAXG`, `USDC`)
 - `amount`: Amount in token units
 
 **Example:**

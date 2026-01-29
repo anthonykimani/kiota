@@ -20,9 +20,14 @@
  */
 
 import { FusionSDK, NetworkEnum, PrivateKeyProviderConnector } from '@1inch/fusion-sdk';
+import { EIP712TypedData } from '@1inch/limit-order-sdk';
 import { JsonRpcProvider } from 'ethers';
 import { ISwapProvider, QuoteParams, QuoteResult, SwapParams, SwapResult, SwapStatus } from '../interfaces/ISwapProvider';
 import { createLogger } from '../utils/logger.util';
+import { WalletRepository } from '../repositories/wallet.repo';
+import { privyService } from '../utils/provider/privy';
+
+type FusionSignerMode = 'private_key' | 'privy';
 
 const logger = createLogger('fusion-swap-provider');
 
@@ -30,24 +35,55 @@ const logger = createLogger('fusion-swap-provider');
 const ONEINCH_API_KEY = process.env.ONEINCH_API_KEY??"";
 const SWAP_WALLET_PRIVATE_KEY = process.env.SWAP_WALLET_PRIVATE_KEY || '';
 const NODE_URL = process.env.NODE_URL || 'https://eth.llamarpc.com';
+const FUSION_SIGNER_MODE = (process.env.ONEINCH_FUSION_SIGNER || 'private_key') as FusionSignerMode;
+
+class PrivyProviderConnector {
+  private rpcProvider: JsonRpcProvider;
+
+  constructor() {
+    this.rpcProvider = new JsonRpcProvider(NODE_URL);
+  }
+
+  async signTypedData(walletAddress: string, typedData: EIP712TypedData): Promise<string> {
+    const walletRepo = new WalletRepository();
+    const wallet = await walletRepo.getByAddress(walletAddress);
+
+    if (!wallet) {
+      throw new Error(`Wallet not found for address ${walletAddress}`);
+    }
+
+    const privyWalletId = wallet.privyWalletId || wallet.privyUserId;
+
+    if (!privyWalletId) {
+      throw new Error(`Privy wallet ID not found for address ${walletAddress}`);
+    }
+
+    const result = await privyService.signTypedData(privyWalletId, typedData);
+
+    if (!result.success || !result.signature) {
+      throw new Error(result.error || 'Privy typed data signing failed');
+    }
+
+    return result.signature;
+  }
+
+  async ethCall(contractAddress: string, callData: string): Promise<string> {
+    return this.rpcProvider.call({ to: contractAddress, data: callData });
+  }
+}
 
 /**
  * Fusion SDK Provider Implementation
  *
- * NOTE: Fusion SDK with Privy wallets is currently NOT SUPPORTED
- * because Fusion requires EIP-712 typed data signing, which needs
- * to be added to the Privy service integration.
- *
- * For now, use Classic Swap for both testnet and mainnet with Privy wallets.
+ * NOTE: Fusion SDK is mainnet-only and must be explicitly enabled.
+ * Signer mode can be configured to use Privy typed-data signing or a server key.
  */
 export class FusionSwapProvider implements ISwapProvider {
   private sdk: FusionSDK | null = null;
   private initialized: boolean = false;
 
-  constructor() {
-    // NOTE: Fusion SDK initialization disabled for Privy wallet integration
-    logger.warn('FusionSwapProvider: Not compatible with Privy wallets - use ClassicSwapProvider instead');
-    this.initialized = false;
+  constructor(private signerMode: FusionSignerMode = FUSION_SIGNER_MODE) {
+    this.initializeSDK();
   }
 
   /**
@@ -56,10 +92,6 @@ export class FusionSwapProvider implements ISwapProvider {
   private initializeSDK(): void {
     if (!ONEINCH_API_KEY) {
       throw new Error('ONEINCH_API_KEY not configured');
-    }
-
-    if (!SWAP_WALLET_PRIVATE_KEY) {
-      throw new Error('SWAP_WALLET_PRIVATE_KEY not configured');
     }
 
     // Create ethers provider for blockchain calls
@@ -75,11 +107,20 @@ export class FusionSwapProvider implements ISwapProvider {
       extend: () => {}
     };
 
-    // Create private key connector
-    const connector = new PrivateKeyProviderConnector(
-      SWAP_WALLET_PRIVATE_KEY,
-      ethersProviderConnector as any
-    );
+    let connector: any;
+
+    if (this.signerMode === 'privy') {
+      connector = new PrivyProviderConnector();
+    } else {
+      if (!SWAP_WALLET_PRIVATE_KEY) {
+        throw new Error('SWAP_WALLET_PRIVATE_KEY not configured');
+      }
+
+      connector = new PrivateKeyProviderConnector(
+        SWAP_WALLET_PRIVATE_KEY,
+        ethersProviderConnector as any
+      );
+    }
 
     // Initialize Fusion SDK
     this.sdk = new FusionSDK({
@@ -94,6 +135,7 @@ export class FusionSwapProvider implements ISwapProvider {
     logger.info('Fusion SDK initialized', {
       network: 'ethereum (1)',
       url: 'https://api.1inch.dev/fusion',
+      signerMode: this.signerMode,
     });
   }
 
@@ -277,18 +319,26 @@ export class FusionSwapProvider implements ISwapProvider {
     const hasApiKey = !!ONEINCH_API_KEY;
     const hasPrivateKey = !!SWAP_WALLET_PRIVATE_KEY;
     const hasRpcUrl = !!NODE_URL;
+    const hasPrivyCreds = !!process.env.PRIVY_APP_ID && !!process.env.PRIVY_APP_SECRET;
 
     if (!hasApiKey) {
       logger.warn('ONEINCH_API_KEY not configured');
     }
-    if (!hasPrivateKey) {
+    if (this.signerMode === 'private_key' && !hasPrivateKey) {
       logger.warn('SWAP_WALLET_PRIVATE_KEY not configured');
+    }
+    if (this.signerMode === 'privy' && !hasPrivyCreds) {
+      logger.warn('Privy credentials not configured');
     }
     if (!hasRpcUrl) {
       logger.warn('NODE_URL not configured');
     }
 
-    return hasApiKey && hasPrivateKey && this.initialized;
+    if (this.signerMode === 'privy') {
+      return hasApiKey && hasPrivyCreds && hasRpcUrl && this.initialized;
+    }
+
+    return hasApiKey && hasPrivateKey && hasRpcUrl && this.initialized;
   }
 
   /**

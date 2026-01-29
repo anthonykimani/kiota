@@ -9,10 +9,10 @@ export class PortfolioHolding {
   portfolioId: string;
 
   @Column({ type: 'varchar', length: 20 })
-  assetSymbol: string; // 'USDM', 'bCSPX', 'PAXG', etc.
+  assetSymbol: string; // 'USDM', 'BCSPX', 'PAXG', etc.
 
   @Column({ type: 'varchar', length: 20 })
-  assetCategory: string; // 'stable_yield', 'tokenized_stocks', 'tokenized_gold', 'speculative'
+  assetCategory: string; // 'stable_yields', 'tokenized_stocks', 'tokenized_gold', 'blue_chip_crypto', 'cash'
 
   @Column({ type: 'decimal', precision: 18, scale: 8, default: 0 })
   balance: number; // Token balance

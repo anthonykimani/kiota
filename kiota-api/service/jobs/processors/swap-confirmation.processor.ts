@@ -21,7 +21,6 @@
 import { Job } from 'bull';
 import { SwapRepository } from '../../repositories/swap.repo';
 import { swapProvider } from '../../services/swap-provider.factory';
-import { fromWei, getAssetCategory, AssetType as TokenAssetType } from '../../configs/tokens.config';
 import { createLogger } from '../../utils/logger.util';
 import { TransactionStatus } from '../../enums/Transaction';
 
@@ -123,8 +122,8 @@ export async function processSwapConfirmation(
       await contextLogger.withTiming('Update balances atomically', async () => {
         await balanceUpdaterService.updateAfterSwap({
           userId: transaction.userId,
-          fromAsset: transaction.sourceAsset as unknown as TokenAssetType,
-          toAsset: transaction.destinationAsset as unknown as TokenAssetType,
+          fromAsset: transaction.sourceAsset,
+          toAsset: transaction.destinationAsset,
           fromAmount: Number(transaction.sourceAmount),
           toAmount: actualToAmount,
           transactionId: transaction.id,

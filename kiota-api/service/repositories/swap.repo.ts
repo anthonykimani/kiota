@@ -10,16 +10,16 @@
 import { Repository } from 'typeorm';
 import AppDataSource from '../configs/ormconfig';
 import { Transaction } from '../models/transaction.entity';
-import { AssetType, TransactionStatus, TransactionType } from '../enums/Transaction';
-import { AssetType as TokenAssetType } from '../configs/tokens.config';
+import { TransactionStatus, TransactionType } from '../enums/Transaction';
+import { assetRegistry } from '../services/asset-registry.service';
 
 /**
  * Swap creation parameters
  */
 export interface CreateSwapParams {
   userId: string;
-  fromAsset: TokenAssetType;
-  toAsset: TokenAssetType;
+  fromAsset: string;
+  toAsset: string;
   fromAmount: number;
   estimatedToAmount: number;
   slippage: number;
@@ -63,9 +63,8 @@ export class SwapRepository {
    * Idempotent via orderHash in metadata (checked before creation)
    */
   async createSwap(data: CreateSwapParams): Promise<Transaction> {
-    // Map token asset types to transaction asset types
-    const sourceAsset = this.mapAssetType(data.fromAsset);
-    const destinationAsset = this.mapAssetType(data.toAsset);
+    const sourceAssetClassKey = await assetRegistry.getAssetClassKeyBySymbol(data.fromAsset);
+    const destinationAssetClassKey = await assetRegistry.getAssetClassKeyBySymbol(data.toAsset);
 
     // If orderHash provided, check if swap already exists (idempotency)
     if (data.metadata.orderHash) {
@@ -80,11 +79,13 @@ export class SwapRepository {
       userId: data.userId,
       type: data.type || TransactionType.SWAP,
       status: TransactionStatus.PENDING,
-      sourceAsset,
+      sourceAsset: data.fromAsset,
       sourceAmount: data.fromAmount,
-      destinationAsset,
+      destinationAsset: data.toAsset,
       destinationAmount: data.estimatedToAmount,
       valueUsd: data.fromAmount, // Assume all assets are USD-pegged or tracked
+      sourceAssetClassKey: sourceAssetClassKey ?? null,
+      destinationAssetClassKey: destinationAssetClassKey ?? null,
       chain: 'base', // Always Base for now
       tokenSymbol: data.toAsset,
       metadata: {
@@ -242,18 +243,15 @@ export class SwapRepository {
    */
   async getSwapsByAssetPair(
     userId: string,
-    fromAsset: TokenAssetType,
-    toAsset: TokenAssetType,
+    fromAsset: string,
+    toAsset: string,
     limit: number = 10
   ): Promise<Transaction[]> {
-    const sourceAsset = this.mapAssetType(fromAsset);
-    const destinationAsset = this.mapAssetType(toAsset);
-
     return await this.repo.find({
       where: {
         userId,
-        sourceAsset,
-        destinationAsset,
+        sourceAsset: fromAsset,
+        destinationAsset: toAsset,
         status: TransactionStatus.COMPLETED,
         type: TransactionType.SWAP,
       },
@@ -287,8 +285,8 @@ export class SwapRepository {
   async createRebalanceSwaps(
     userId: string,
     swaps: Array<{
-      fromAsset: TokenAssetType;
-      toAsset: TokenAssetType;
+      fromAsset: string;
+      toAsset: string;
       fromAmount: number;
       estimatedToAmount: number;
       slippage: number;
@@ -336,14 +334,4 @@ export class SwapRepository {
   /**
    * Map token asset type to transaction asset type enum
    */
-  private mapAssetType(asset: TokenAssetType): AssetType {
-    const mapping: Record<TokenAssetType, AssetType> = {
-      USDC: AssetType.USDC,
-      USDM: AssetType.USDM,
-      BCSPX: AssetType.BCSPX,
-      PAXG: AssetType.PAXG,
-    };
-
-    return mapping[asset];
-  }
 }

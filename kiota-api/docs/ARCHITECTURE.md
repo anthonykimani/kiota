@@ -2,12 +2,12 @@
 
 ## Overview
 
-Kiota is a wealth management platform for Kenya's emerging middle class, enabling access to USD-denominated tokenized assets through mobile money (M-Pesa) integration.
+Kiota is a wealth management platform for Kenya's emerging middle class, enabling access to USD-denominated asset classes through mobile money (M-Pesa) integration.
 
 ### Core Value Proposition
 
 - **Problem**: Kenyan savers lose 7-15% annually to currency devaluation
-- **Solution**: Access to tokenized assets (USDM 5% yield, S&P 500, Gold) via M-Pesa
+- **Solution**: Access to USD-denominated asset classes (stable yields, tokenized stocks, tokenized gold) via M-Pesa
 - **Target**: 10,000 sophisticated users in Phase 1
 
 ---
@@ -24,7 +24,7 @@ Kiota is a wealth management platform for Kenya's emerging middle class, enablin
 | **Queue** | Bull (Redis) | Background job processing |
 | **Blockchain** | viem | Ethereum/Base interaction |
 | **Wallet** | Privy | Non-custodial embedded wallets |
-| **DEX** | 1inch | Token swaps |
+| **DEX** | 1inch | Asset class swaps |
 | **AI** | OpenAI GPT-4o-mini | Strategy generation |
 
 ---

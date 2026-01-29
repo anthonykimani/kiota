@@ -5,6 +5,7 @@ import { GoalRepository } from '../repositories/goal.repo';
 import { MarketDataRepository } from '../repositories/market-data.repo';
 import Controller from './controller';
 import { AuthenticatedRequest } from '../interfaces/IAuth';
+import { assetRegistry } from '../services/asset-registry.service';
 
 /**
  * Dashboard Controller
@@ -75,22 +76,24 @@ class DashboardController extends Controller {
                 ? (monthlyChange / portfolio.totalValueUsd) * 100 
                 : 0;
 
+            const stablePrimary = await assetRegistry.getPrimaryAssetByClassKey('stable_yields');
+            const stocksPrimary = await assetRegistry.getPrimaryAssetByClassKey('tokenized_stocks');
+            const goldPrimary = await assetRegistry.getPrimaryAssetByClassKey('tokenized_gold');
+
             const assets = [
                 {
-                    category: 'preservation',
-                    emoji: '🛡️',
-                    name: 'USDM',
-                    description: 'Preservation',
+                    classKey: 'stable_yields',
+                    name: 'Stable Yields',
+                    primaryAssetSymbol: stablePrimary?.symbol || null,
                     valueUsd: portfolio.stableYieldsValueUsd,
                     percentage: portfolio.stableYieldsPercent,
                     monthlyEarnings: portfolio.stableYieldsValueUsd * 0.05 / 12,
                     apy: 5.0
                 },
                 {
-                    category: 'growth',
-                    emoji: '📈',
-                    name: 'bCSPX',
-                    description: 'Growth',
+                    classKey: 'tokenized_stocks',
+                    name: 'Tokenized Stocks',
+                    primaryAssetSymbol: stocksPrimary?.symbol || null,
                     valueUsd: portfolio.tokenizedStocksValueUsd,
                     percentage: portfolio.tokenizedStocksPercent,
                     monthlyEarnings: portfolio.tokenizedStocksValueUsd * 0.10 / 12,
@@ -98,10 +101,9 @@ class DashboardController extends Controller {
                     requiresTier2: true
                 },
                 {
-                    category: 'hedge',
-                    emoji: '🥇',
-                    name: 'PAXG',
-                    description: 'Hedge',
+                    classKey: 'tokenized_gold',
+                    name: 'Tokenized Gold',
+                    primaryAssetSymbol: goldPrimary?.symbol || null,
                     valueUsd: portfolio.tokenizedGoldValueUsd,
                     percentage: portfolio.tokenizedGoldPercent,
                     monthlyEarnings: portfolio.tokenizedGoldValueUsd * 0.05 / 12

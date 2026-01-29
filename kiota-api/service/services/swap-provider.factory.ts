@@ -2,8 +2,8 @@
  * Swap Provider Factory
  *
  * Creates the appropriate swap provider based on network configuration:
- * - Ethereum Sepolia (testnet) → ClassicSwapProvider
- * - Ethereum Mainnet (production) → FusionSwapProvider
+ * - Fusion enabled + Ethereum mainnet → FusionSwapProvider
+ * - Otherwise → ClassicSwapProvider
  *
  * This allows seamless switching between implementations via environment variables
  * without changing any application code.
@@ -20,24 +20,29 @@ const logger = createLogger('swap-provider-factory');
  * Create swap provider based on network configuration
  *
  * Selection logic:
- * - Always uses Classic Swap when using Privy wallets
- * - Fusion SDK requires EIP-712 signing which is not yet implemented in Privy integration
+ * - Fusion is mainnet-only and must be explicitly enabled
  *
  * @returns ISwapProvider implementation
  */
 export function createSwapProvider(): ISwapProvider {
   const network = process.env.ONEINCH_NETWORK || 'ethereum';
+  const fusionEnabled = process.env.ONEINCH_FUSION_ENABLED === 'true';
 
   let provider: ISwapProvider;
 
-  // NOTE: Always use Classic Swap with Privy wallets
-  // Fusion SDK requires EIP-712 typed data signing which needs
-  // additional Privy service integration
-  logger.info('Creating Classic Swap provider for Privy wallets', {
-    network,
-    reason: 'Privy embedded wallets use Classic Swap (Fusion requires EIP-712 signing support)'
-  });
-  provider = new ClassicSwapProvider();
+  if (fusionEnabled && network === 'ethereum') {
+    logger.info('Creating Fusion Swap provider', {
+      network,
+      signerMode: process.env.ONEINCH_FUSION_SIGNER || 'private_key',
+    });
+    provider = new FusionSwapProvider();
+  } else {
+    logger.info('Creating Classic Swap provider', {
+      network,
+      reason: fusionEnabled ? 'Fusion only supported on Ethereum mainnet' : 'Fusion disabled'
+    });
+    provider = new ClassicSwapProvider();
+  }
 
   // Verify provider is configured
   if (!provider.isConfigured()) {
