@@ -6,6 +6,7 @@ import { MarketDataRepository } from '../repositories/market-data.repo';
 import { WalletRepository } from '../repositories/wallet.repo';
 import Controller from './controller';
 import { createPublicClient, formatUnits, http, parseAbi, parseAbiItem } from 'viem';
+import { AuthenticatedRequest } from '../interfaces/IAuth';
 
 import { DepositSessionRepository } from '../repositories/deposit-session.repo';
 import { baseSepolia } from 'viem/chains';
@@ -42,7 +43,7 @@ class DepositController extends Controller {
      */
     public static async createDepositIntent(req: Request, res: Response) {
         try {
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
             if (!userId) {
                 return res.send(super.response(super._401, null, ['Not authenticated']));
             }
@@ -160,7 +161,7 @@ class DepositController extends Controller {
      */
     public static async confirmDeposit(req: Request, res: Response) {
         try {
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
             if (!userId) {
                 return res.send(super.response(super._401, null, ['Not authenticated']));
             }
@@ -206,7 +207,6 @@ class DepositController extends Controller {
                 );
             }
 
-            const createdAtBlockNumber = Number(await baseClient.getBlockNumber());
             const latestBlock = Number(await baseClient.getBlockNumber());
 
             // Use session boundary if available; fallback to a conservative window.
@@ -377,7 +377,7 @@ class DepositController extends Controller {
             const userRepo: UserRepository = new UserRepository();
             const marketDataRepo: MarketDataRepository = new MarketDataRepository();
 
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
 
             if (!userId) {
                 return res.send(
@@ -532,7 +532,7 @@ class DepositController extends Controller {
         try {
             const transactionRepo: TransactionRepository = new TransactionRepository();
 
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
             const { transactionId } = req.body;
 
             if (!transactionId) {
@@ -651,7 +651,7 @@ class DepositController extends Controller {
         try {
             const transactionRepo: TransactionRepository = new TransactionRepository();
 
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
             const { transactionId } = req.params;
 
             // Get transaction
@@ -757,7 +757,7 @@ class DepositController extends Controller {
             const user = await userRepo.getById(transaction.userId);
             if (user && !user.firstDepositSubsidyUsed) {
                 user.firstDepositSubsidyUsed = true;
-                // Note: Need to add save method to UserRepository
+                await userRepo.save(user);
             }
 
             const completionData = {
@@ -790,7 +790,7 @@ class DepositController extends Controller {
      */
     public static async convertDeposit(req: Request, res: Response) {
         try {
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
             if (!userId) {
                 return res.send(super.response(super._401, null, ['Not authenticated']));
             }

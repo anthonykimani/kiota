@@ -6,6 +6,7 @@ import { TransactionRepository } from '../repositories/transaction.repo';
 import Controller from './controller';
 import { createPublicClient, formatUnits, http } from 'viem';
 import { baseSepolia } from "viem/chains";
+import { AuthenticatedRequest } from '../interfaces/IAuth';
 
 // ---- MVP Config (Base + USDC only) ----
 const BASE_RPC_URL = process.env.BASE_RPC_URL || '';
@@ -38,7 +39,7 @@ class WalletController extends Controller {
         try {
             const walletRepo: WalletRepository = new WalletRepository();
             const txRepo: TransactionRepository = new TransactionRepository();
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
 
             if (!userId) {
                 return res.send(
@@ -135,7 +136,7 @@ class WalletController extends Controller {
     public static async walletExists(req: Request, res: Response) {
         try {
             const walletRepo: WalletRepository = new WalletRepository();
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
 
             if (!userId) {
                 return res.send(
@@ -171,7 +172,7 @@ class WalletController extends Controller {
     public static async updateBalances(req: Request, res: Response) {
         try {
             const walletRepo: WalletRepository = new WalletRepository();
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
 
             if (!userId) {
                 return res.send(

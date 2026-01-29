@@ -8,7 +8,7 @@ import {
   Index,
 } from 'typeorm';
 import { ChamaMembership } from './chama-membership.entity';
-import { ChamaActivity } from './chama-activity';
+import { ChamaActivity } from './chama-activity.entity';
 import { ChamaStatus, ChamaType } from '../enums/Chama';
 
 @Entity('chamas')

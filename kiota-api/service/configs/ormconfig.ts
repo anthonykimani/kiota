@@ -11,7 +11,7 @@ import { PortfolioHolding } from "../models/portfolio-holding.entity";
 import { Lesson } from "../models/lesson.entity";
 import { LessonProgress } from "../models/lesson-progress.entity";
 import { LearningModule } from "../models/learning-module.entity";
-import { LearningTrack } from "../models/learningTrack.entity";
+import { LearningTrack } from "../models/learning-track.entity";
 import { Goal } from "../models/goal.entity";
 import { GoalContribution } from "../models/goal-contribution.entity";
 import { GoalMilestone } from "../models/goal-milestone.entity";
@@ -26,7 +26,7 @@ import { Notification } from "../models/notification.entity";
 import { RoundupTracker } from "../models/roundup-tracker.entity";
 import { SavingsCommitment } from "../models/savings-commitment.entity";
 import { UserBadge } from "../models/user-badge.entity";
-import { ChamaActivity } from "../models/chama-activity";
+import { ChamaActivity } from "../models/chama-activity.entity";
 import { DepositSession } from "../models/deposit-session.entity";
 import { OnchainProcessedEvent } from "../models/onchain-processed-event.entity";
 

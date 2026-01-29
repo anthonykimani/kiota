@@ -5,6 +5,8 @@ import { PortfolioRepository } from '../repositories/portfolio.repo';
 import Controller from './controller';
 import { privyService } from '../utils/provider/privy';
 import { AuthMethod } from '../enums/AuthMethod';
+import { generateToken } from '../middleware/auth';
+import { AuthenticatedRequest } from '../interfaces/IAuth';
 
 /**
  * Privy Auth Controller
@@ -94,7 +96,7 @@ class PrivyAuthController extends Controller {
 
             // Update last login
             user.lastLoginAt = new Date();
-            // TODO: Add save method to UserRepository if not exists
+            await userRepo.save(user);
 
             // Check if wallet exists in our database
             let wallet = await walletRepo.getByPrivyWalletId(walletDetails.id);
@@ -116,7 +118,7 @@ class PrivyAuthController extends Controller {
             }
 
             // Generate our internal session token
-            const token = PrivyAuthController.generateToken(user.id);
+            const token = generateToken(user.id);
 
             return res.send(
                 super.response(
@@ -299,7 +301,7 @@ class PrivyAuthController extends Controller {
             const portfolio = await portfolioRepo.createPortfolio(user.id);
 
             // Generate token
-            const token = PrivyAuthController.generateToken(user.id);
+            const token = generateToken(user.id);
 
             return res.send(
                 super.response(
@@ -340,7 +342,7 @@ class PrivyAuthController extends Controller {
             const walletRepo: WalletRepository = new WalletRepository();
             const portfolioRepo: PortfolioRepository = new PortfolioRepository();
 
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
 
             if (!userId) {
                 return res.send(
@@ -409,7 +411,7 @@ class PrivyAuthController extends Controller {
     public static async refreshFromPrivy(req: Request, res: Response) {
         try {
             const userRepo: UserRepository = new UserRepository();
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
 
             if (!userId) {
                 return res.send(
@@ -467,7 +469,7 @@ class PrivyAuthController extends Controller {
             if (authDetails.email && !user.email) {
                 user.email = authDetails.email;
                 updated = true;
-                // TODO: Save user
+                await userRepo.save(user);
             }
 
             return res.send(
@@ -492,19 +494,6 @@ class PrivyAuthController extends Controller {
         } catch (error) {
             return res.send(super.response(super._500, null, super.ex(error)));
         }
-    }
-
-    /**
-     * Generate internal session token
-     * @param userId Our internal user ID
-     * @returns Base64 token
-     */
-    private static generateToken(userId: string): string {
-        return Buffer.from(JSON.stringify({
-            userId,
-            iat: Date.now(),
-            exp: Date.now() + (7 * 24 * 60 * 60 * 1000) // 7 days
-        })).toString('base64');
     }
 }
 

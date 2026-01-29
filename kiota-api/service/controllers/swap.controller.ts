@@ -19,6 +19,7 @@ import { WalletRepository } from '../repositories/wallet.repo';
 import { swapProvider } from '../services/swap-provider.factory';
 import { getTokenAddress, getTokenInfo, toWei, fromWei, AssetType as TokenAssetType } from '../configs/tokens.config';
 import { createLogger } from '../utils/logger.util';
+import { AuthenticatedRequest } from '../interfaces/IAuth';
 
 import { SWAP_EXECUTION_QUEUE } from '../configs/queue.config';
 
@@ -101,7 +102,7 @@ class SwapController extends Controller {
    */
   public static async getSwapQuote(req: Request, res: Response) {
     try {
-      const userId = (req as any).userId;
+      const userId = (req as AuthenticatedRequest).userId;
       if (!userId) {
         return res.send(super.response(super._401, null, ['Not authenticated']));
       }
@@ -231,7 +232,7 @@ class SwapController extends Controller {
    */
   public static async executeSwap(req: Request, res: Response) {
     try {
-      const userId = (req as any).userId;
+      const userId = (req as AuthenticatedRequest).userId;
       if (!userId) {
         return res.send(super.response(super._401, null, ['Not authenticated']));
       }
@@ -379,7 +380,7 @@ class SwapController extends Controller {
    */
   public static async getSwapStatus(req: Request, res: Response) {
     try {
-      const userId = (req as any).userId;
+      const userId = (req as AuthenticatedRequest).userId;
       if (!userId) {
         return res.send(super.response(super._401, null, ['Not authenticated']));
       }
@@ -441,7 +442,7 @@ class SwapController extends Controller {
    */
   public static async getSwapHistory(req: Request, res: Response) {
     try {
-      const userId = (req as any).userId;
+      const userId = (req as AuthenticatedRequest).userId;
       if (!userId) {
         return res.send(super.response(super._401, null, ['Not authenticated']));
       }

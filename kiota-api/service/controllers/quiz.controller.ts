@@ -5,6 +5,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from "openai";
 import z from "zod";
 import Controller from './controller';
+import { AuthenticatedRequest } from '../interfaces/IAuth';
 
 const StrategySchema = z.object({
     allocation: z.object({
@@ -42,7 +43,7 @@ class QuizController extends Controller {
             const aiSessionRepo: AIAdvisorSessionRepository = new AIAdvisorSessionRepository();
 
             // Comes from requireInternalAuth middleware
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
 
             if (!userId) {
                 return res.send(super.response(super._401, null, ['Not authenticated']));
@@ -178,7 +179,7 @@ class QuizController extends Controller {
             const userRepo: UserRepository = new UserRepository();
             const aiSessionRepo: AIAdvisorSessionRepository = new AIAdvisorSessionRepository();
 
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
             const { sessionId, accepted, customAllocation } = req.body;
 
             if (!sessionId) {
@@ -239,7 +240,7 @@ class QuizController extends Controller {
     public static async getLatestSession(req: Request, res: Response) {
         try {
             const aiSessionRepo: AIAdvisorSessionRepository = new AIAdvisorSessionRepository();
-            const userId = (req as any).userId;
+            const userId = (req as AuthenticatedRequest).userId;
 
             // Get latest session
             const session = await aiSessionRepo.getLatestQuizSession(userId);
@@ -301,7 +302,7 @@ class QuizController extends Controller {
 
         try {
             const response = await client.responses.create({
-                model: "gpt-4.1-mini",
+                model: "gpt-4o-mini",
                 input: prompt,
                 // “Structured Outputs” style:
                 text: {
