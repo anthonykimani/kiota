@@ -16,6 +16,7 @@ export interface QuoteParams {
   fromToken: string;        // Token contract address (0x...)
   toToken: string;          // Token contract address (0x...)
   amount: string;           // Amount in wei
+  walletAddress?: string;   // Maker wallet address (Fusion)
   slippage?: number;        // Slippage tolerance in percent (default: 1)
 }
 

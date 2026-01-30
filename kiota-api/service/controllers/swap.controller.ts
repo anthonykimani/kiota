@@ -11,7 +11,7 @@
  */
 
 import { Request, Response } from 'express';
-import { createPublicClient, http, parseAbi } from 'viem';
+import { createPublicClient, http, parseAbi, getAddress } from 'viem';
 import { mainnet, sepolia } from 'viem/chains';
 import Controller from './controller';
 import { SwapRepository } from '../repositories/swap.repo';
@@ -52,6 +52,20 @@ function toWeiByDecimals(amount: number | string, decimals: number): string {
 function fromWeiByDecimals(amountWei: string, decimals: number): number {
   const divisor = 10 ** decimals;
   return Number(amountWei) / divisor;
+}
+
+function normalizeAddress(address: string): string {
+  return getAddress(address);
+}
+
+function toJsonSafe(value: unknown): any {
+  if (value === undefined) {
+    return null;
+  }
+
+  return JSON.parse(
+    JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? v.toString() : v))
+  );
 }
 
 function createPublicClientForNetwork(network: string): PublicClientLike | null {
@@ -118,6 +132,13 @@ class SwapController extends Controller {
 
       const amountNum = Number(amount);
 
+      const walletRepo = new WalletRepository();
+      const wallet = await walletRepo.getByUserId(userId);
+
+      if (!wallet || !wallet.address) {
+        return res.send(super.response(super._404, null, ['Wallet not found']));
+      }
+
       // Check if 1inch service is configured
       if (!swapProvider.isConfigured()) {
         return res.send(
@@ -133,8 +154,15 @@ class SwapController extends Controller {
       }
 
       if (fromToken && toToken) {
-        const fromTokenAddress = String(fromToken);
-        const toTokenAddress = String(toToken);
+        let fromTokenAddress: string;
+        let toTokenAddress: string;
+
+        try {
+          fromTokenAddress = normalizeAddress(String(fromToken));
+          toTokenAddress = normalizeAddress(String(toToken));
+        } catch {
+          return res.send(super.response(super._400, null, ['Invalid token address']));
+        }
 
         const fromDecimals = await getTokenDecimals(fromTokenAddress, publicClient);
         const toDecimals = await getTokenDecimals(toTokenAddress, publicClient);
@@ -151,6 +179,7 @@ class SwapController extends Controller {
           fromToken: fromTokenAddress,
           toToken: toTokenAddress,
           amount: amountWei,
+          walletAddress: wallet.address,
         });
 
         const estimatedToAmount = fromWeiByDecimals(quote.toAmount, toDecimals);
@@ -166,7 +195,7 @@ class SwapController extends Controller {
             fees: quote.fees,
             expiresAt: quote.expiresAt,
             provider: swapProvider.getProviderName(),
-            quote: quote.raw ?? null,
+            quote: toJsonSafe(quote.raw),
           })
         );
       }
@@ -189,14 +218,21 @@ class SwapController extends Controller {
 
       const fromDecimals = assetRegistry.resolveAssetDecimals(fromAssetRecord);
       const toDecimals = assetRegistry.resolveAssetDecimals(toAssetRecord);
-      const fromTokenAddress = await assetRegistry.resolveAssetAddress(
-        fromAssetRecord,
-        process.env.ONEINCH_NETWORK ?? ''
-      );
-      const toTokenAddress = await assetRegistry.resolveAssetAddress(
-        toAssetRecord,
-        process.env.ONEINCH_NETWORK ?? ''
-      );
+      let fromTokenAddress: string;
+      let toTokenAddress: string;
+
+      try {
+        fromTokenAddress = normalizeAddress(await assetRegistry.resolveAssetAddress(
+          fromAssetRecord,
+          process.env.ONEINCH_NETWORK ?? ''
+        ));
+        toTokenAddress = normalizeAddress(await assetRegistry.resolveAssetAddress(
+          toAssetRecord,
+          process.env.ONEINCH_NETWORK ?? ''
+        ));
+      } catch {
+        return res.send(super.response(super._400, null, ['Invalid token address']));
+      }
       const amountWei = toWeiByDecimals(amountNum, fromDecimals);
 
       logger.info('Fetching swap quote', {
@@ -210,6 +246,7 @@ class SwapController extends Controller {
         fromToken: fromTokenAddress,
         toToken: toTokenAddress,
         amount: amountWei,
+        walletAddress: wallet.address,
       });
 
       const estimatedToAmount = fromWeiByDecimals(quote.toAmount, toDecimals);
@@ -227,7 +264,7 @@ class SwapController extends Controller {
           fees: quote.fees,
           expiresAt: quote.expiresAt,
           provider: swapProvider.getProviderName(),
-          quote: quote.raw ?? null,
+          quote: toJsonSafe(quote.raw),
         })
       );
     } catch (error) {
@@ -334,6 +371,7 @@ class SwapController extends Controller {
         toToken: toTokenAddress,
         amount: amountWei,
         slippage: slippageNum,
+        walletAddress: wallet.address,
       });
 
       const estimatedToAmount = fromWeiByDecimals(quote.toAmount, toDecimals);
