@@ -6,7 +6,7 @@ import { CaretLeftIcon } from "@phosphor-icons/react"
 
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { QuizOption } from "@/components/ui/quiz-option"
+import { QuizOption } from "@/components/custom/quiz-option"
 import { ScreenWrapper } from "@/components/custom/screen-wrapper"
 import { investmentToleranceQuiz } from "@/lib/quiz"
 

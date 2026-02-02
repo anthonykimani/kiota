@@ -3,8 +3,8 @@
 import Image from 'next/image'
 import { ScreenWrapper } from '@/components/custom/screen-wrapper'
 import { Button } from '@/components/ui/button'
-import { PageHeader } from '@/components/ui/page-header'
-import { TransactionRow, TransactionSummary } from '@/components/ui/transaction-row'
+import { PageHeader } from '@/components/custom/page-header'
+import { TransactionRow, TransactionSummary } from '@/components/custom/transaction-row'
 import { CoinAmount, NoEntry, GiveIcon, PaymentIcon, UsdcSvg } from '@/lib/svg'
 
 const ConfirmDeposit = () => {

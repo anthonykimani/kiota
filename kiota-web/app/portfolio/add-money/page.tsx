@@ -5,8 +5,8 @@ import Image from 'next/image'
 import { LightingSvg } from '@/lib/svg'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { PageHeader } from "@/components/ui/page-header"
-import { AmountChip } from "@/components/ui/amount-chip"
+import { PageHeader } from "@/components/custom/page-header"
+import { AmountChip } from "@/components/custom/amount-chip"
 import { ScreenWrapper } from "@/components/custom/screen-wrapper"
 import {
   Drawer,
