@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { CaretDownIcon } from "@phosphor-icons/react"
 import Image from 'next/image'
 import { LightingSvg } from '@/lib/svg'
@@ -17,15 +18,30 @@ import {
 } from "@/components/ui/drawer"
 
 const AddMoneyPage = () => {
+  const router = useRouter()
+
+  const handleBack = () => {
+    router.push('/portfolio')
+  }
+
+  const handleSkip = () => {
+    router.push('/home')
+  }
+
+  const handlePreviewOrder = () => {
+    router.push('/portfolio/review-deposit')
+  }
+
   return (
     <ScreenWrapper centered className="py-6 gap-y-6">
       <PageHeader
         title="Add Money"
-        onBack={() => { }}
+        onBack={handleBack}
         rightAction={
           <button
             type="button"
             className="text-kiota-text-secondary text-sm p-2"
+            onClick={handleSkip}
           >
             Skip
           </button>
@@ -79,7 +95,7 @@ const AddMoneyPage = () => {
         </DrawerContent>
       </Drawer>
 
-      <Button buttonColor="primary" className="w-full mt-1" >
+      <Button buttonColor="primary" className="w-full mt-1" onClick={handlePreviewOrder}>
         Preview Order
       </Button>
 

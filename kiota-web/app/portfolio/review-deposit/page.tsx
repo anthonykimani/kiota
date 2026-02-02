@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { AllocationBarChart } from '@/components/custom/allocation-bar-chart'
 import { AssetList } from '@/components/custom/asset-row'
 import { PortfolioProjectionChart } from '@/components/custom/chart-area-interactive'
@@ -26,11 +27,21 @@ const projectionData = [
 ]
 
 const ReviewDeposit = () => {
+    const router = useRouter()
+
+    const handleBack = () => {
+        router.push('/portfolio/add-money')
+    }
+
+    const handleConfirmDeposit = () => {
+        router.push('/portfolio/confirm-deposit')
+    }
+
     return (
         <ScreenWrapper centered className='py-6 gap-y-6'>
             <PageHeader
                 title="Review Deposit"
-                onBack={() => { }}
+                onBack={handleBack}
                 rightAction={
                     <button
                         type="button"
@@ -57,7 +68,7 @@ const ReviewDeposit = () => {
                 description="Your portfolio is well-diversified and low in volatility, making it suitable for steady, long-term growth."
             />
 
-            <Button buttonColor="primary" className="w-full">
+            <Button buttonColor="primary" className="w-full" onClick={handleConfirmDeposit}>
                 Confirm & Deposit
             </Button>
 

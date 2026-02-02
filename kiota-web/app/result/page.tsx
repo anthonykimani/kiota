@@ -12,8 +12,7 @@ export default function ResultPage() {
   const router = useRouter()
 
   const handleContinue = () => {
-    // TODO: Navigate to dashboard or next step
-    router.push("/")
+    router.push("/home")
   }
 
   const handleRetakeQuiz = () => {

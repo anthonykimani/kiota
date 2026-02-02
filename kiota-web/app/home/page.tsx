@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { ChartAreaLinear } from '@/components/custom/chart-area-linear'
 import { ScreenWrapper } from '@/components/custom/screen-wrapper'
 import { ActionCard } from '@/components/custom/action-card'
@@ -22,9 +23,25 @@ import React from 'react'
 const DEMO_HAS_ASSETS = true
 
 const HomePage = () => {
+    const router = useRouter()
+    
     // In real app, this would come from API/state
     const portfolio: UserPortfolio | null = DEMO_HAS_ASSETS ? sampleUserPortfolio : null
     const userHasAssets = hasAssets(portfolio)
+
+    const handleSetupPortfolio = () => {
+        router.push('/quiz')
+    }
+
+    const handleExploreMarkets = () => {
+        // TODO: Navigate to markets page when available
+        router.push('/portfolio')
+    }
+
+    const handleSetupGoals = () => {
+        // TODO: Navigate to goals page when available
+        router.push('/portfolio')
+    }
 
     return (
         <div>
@@ -67,6 +84,7 @@ const HomePage = () => {
                             title="You have no goals"
                             subtitle="You haven't set up any goals. Let's set it up today!"
                             buttonText="Setup Now"
+                            onButtonClick={handleSetupGoals}
                         />
                     </div>
                 ) : (
@@ -77,6 +95,7 @@ const HomePage = () => {
                             title="Setup Portfolio"
                             subtitle="Let our roboadvisor help you make your first portfolio with ease"
                             buttonText="Setup Portfolio"
+                            onButtonClick={handleSetupPortfolio}
                         />
 
                         <ActionCard
@@ -85,6 +104,7 @@ const HomePage = () => {
                             title="You have no Market Watchlist"
                             subtitle="Let's setup your market watchlist today."
                             buttonText="Explore Markets"
+                            onButtonClick={handleExploreMarkets}
                         />
 
                         <ActionCard
@@ -93,6 +113,7 @@ const HomePage = () => {
                             title="You have no goals"
                             subtitle="You haven't set up any goals. Let's set it up today!"
                             buttonText="Setup Now"
+                            onButtonClick={handleSetupGoals}
                         />
                     </div>
                 )}
