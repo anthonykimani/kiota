@@ -52,6 +52,16 @@ export const TOKEN_ADDRESSES: Record<string, Record<AssetType, string>> = {
     BCSPX: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
     PAXG: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
   },
+
+  /**
+   * Base Mainnet (Chain ID: 8453)
+   */
+  'base': {
+    USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // Circle USDC on Base
+    USDM: '0x0000000000000000000000000000000000000000', // TODO: USDM not on Base yet
+    BCSPX: '0x0000000000000000000000000000000000000000', // TODO: BCSPX not on Base yet
+    PAXG: '0x0000000000000000000000000000000000000000', // TODO: PAXG not on Base yet
+  },
 };
 
 /**

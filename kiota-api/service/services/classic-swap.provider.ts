@@ -19,7 +19,7 @@
  */
 
 import { createPublicClient, http, parseAbi, encodeFunctionData } from 'viem';
-import { mainnet, sepolia } from 'viem/chains';
+import { mainnet, sepolia, base } from 'viem/chains';
 import { ISwapProvider, QuoteParams, QuoteResult, SwapParams, SwapResult, SwapStatus } from '../interfaces/ISwapProvider';
 import { createLogger } from '../utils/logger.util';
 import { privyService } from '../utils/provider/privy';
@@ -35,14 +35,14 @@ const NODE_URL = process.env.NODE_URL || '';
 const NETWORK_CHAIN_IDS: Record<string, number> = {
   'ethereum': 1,
   'ethereum-sepolia': 11155111,
-  'sepolia': 11155111,
+  'base': 8453,
 };
 
 // Network mapping to viem chains
 const VIEM_CHAINS: Record<string, any> = {
   'ethereum': mainnet,
   'ethereum-sepolia': sepolia,
-  'sepolia': sepolia,
+  'base': base,
 };
 
 // ERC20 ABI for approve and allowance

@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { InfoCard } from "@/components/ui/info-card"
-import { LegendItem } from "@/components/ui/legend-item"
+import { InfoCard } from "@/components/custom/info-card"
+import { LegendItem } from "@/components/custom/legend-item"
 import { ScreenWrapper } from "@/components/custom/screen-wrapper"
 import { ChartPieDonutText } from "@/components/custom/chart-pie-donut"
 import { defaultPortfolioData, resultOverviewData, getAssetClassLabel } from "@/lib/portfolio"
@@ -12,8 +12,7 @@ export default function ResultPage() {
   const router = useRouter()
 
   const handleContinue = () => {
-    // TODO: Navigate to dashboard or next step
-    router.push("/")
+    router.push("/home")
   }
 
   const handleRetakeQuiz = () => {
