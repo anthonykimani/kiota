@@ -13,6 +13,7 @@ router.get('/status/:transactionId', requireInternalAuth, DepositController.getT
 // Onchain USDC deposit flow
 router.post('/intent/create', requireInternalAuth, DepositController.createDepositIntent);
 router.post('/intent/confirm', requireInternalAuth, DepositController.confirmDeposit);
+router.post('/review', requireInternalAuth, DepositController.getDepositReview);
 
 // Deposit conversion (USDC → target allocation)
 router.post('/convert', requireInternalAuth, DepositController.convertDeposit);

@@ -9,9 +9,13 @@ import { Progress } from "@/components/ui/progress"
 import { QuizOption } from "@/components/custom/quiz-option"
 import { ScreenWrapper } from "@/components/custom/screen-wrapper"
 import { investmentToleranceQuiz } from "@/lib/quiz"
+import { useQuiz } from "@/hooks/use-quiz"
+import { useAuth } from "@/context/auth-context"
 
 export default function QuizPage() {
   const router = useRouter()
+  const { isAuthenticated } = useAuth()
+  const { submitQuiz, isSubmitting, error } = useQuiz()
   const [stepIndex, setStepIndex] = React.useState(0)
   const [answers, setAnswers] = React.useState<Record<string, string[]>>(() =>
     investmentToleranceQuiz.reduce<Record<string, string[]>>((acc, question) => {
@@ -49,8 +53,59 @@ export default function QuizPage() {
   const goNext = () => setStepIndex((prev) => Math.min(prev + 1, totalSteps - 1))
   const skipToEnd = () => setStepIndex(totalSteps - 1)
 
-  const handleSubmit = () => {
+  // Map local quiz IDs to API format
+  const mapAnswersToApi = (localAnswers: Record<string, string[]>) => {
+    // Map time horizon
+    const horizonMap: Record<string, string> = {
+      '<1y': 'less_than_1_year',
+      '1-3y': '1-3_years',
+      '3-7y': '3-5_years',
+      '7+y': '5-10_years',
+    }
+
+    // Map volatility to risk tolerance
+    const riskMap: Record<string, string> = {
+      'sell': 'conservative',
+      'hold': 'moderate',
+      'buy': 'aggressive',
+    }
+
+    // Map experience
+    const experienceMap: Record<string, string> = {
+      'new': 'beginner',
+      'some': 'some_experience',
+      'confident': 'experienced',
+      'advanced': 'expert',
+    }
+
+    return {
+      primaryGoal: 'wealth_growth', // Default goal
+      investmentTimeline: horizonMap[localAnswers.horizon?.[0]] || '3-5_years',
+      riskTolerance: riskMap[localAnswers.volatility?.[0]] || 'moderate',
+      investmentExperience: experienceMap[localAnswers.experience?.[0]] || 'beginner',
+      currentSavingsRange: '50000-100000', // Could add to quiz
+      monthlySavingsRange: '5000-10000', // Could add to quiz
+      comfortableWithDollars: true,
+      investmentPriorities: ['preservation', 'growth'],
+    }
+  }
+
+  const handleSubmit = async () => {
+    // Store answers locally for fallback
     localStorage.setItem("quiz-answers", JSON.stringify(answers))
+
+    // If authenticated, submit to API
+    if (isAuthenticated) {
+      const apiAnswers = mapAnswersToApi(answers)
+      const result = await submitQuiz(apiAnswers)
+      
+      if (result) {
+        // Store strategy result for result page
+        localStorage.setItem("quiz-strategy", JSON.stringify(result))
+        localStorage.setItem("quiz-session-id", result.sessionId)
+      }
+    }
+
     router.push("/result")
   }
 
@@ -103,18 +158,24 @@ export default function QuizPage() {
         </div>
 
         {/* Action button */}
+        {error && (
+          <p className="text-red-500 text-sm text-center">{error}</p>
+        )}
+
         <Button
           type="button"
           buttonColor="primary"
           className="w-full"
           onClick={isLastStep ? handleSubmit : goNext}
-          disabled={!isAnswered}
+          disabled={!isAnswered || isSubmitting}
         >
-          {isLastStep
-            ? "Finish quiz"
-            : isMulti
-              ? "Pick at least 1 option to continue"
-              : "Pick 1 option to continue"}
+          {isSubmitting
+            ? "Analyzing..."
+            : isLastStep
+              ? "Finish quiz"
+              : isMulti
+                ? "Pick at least 1 option to continue"
+                : "Pick 1 option to continue"}
         </Button>
       </div>
     </ScreenWrapper>

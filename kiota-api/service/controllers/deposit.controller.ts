@@ -12,6 +12,7 @@ import { DepositSessionRepository } from '../repositories/deposit-session.repo';
 import { baseSepolia } from 'viem/chains';
 import { DEPOSIT_COMPLETION_QUEUE, ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE } from '../configs/queue.config';
 import { assetRegistry } from '../services/asset-registry.service';
+import { AssetSymbol } from '../enums/MarketData';
 
 const BASE_RPC_URL = process.env.BASE_RPC_URL || '';
 const BASE_USDC_ADDRESS = process.env.BASE_USDC_ADDRESS || '';
@@ -358,6 +359,128 @@ class DepositController extends Controller {
                     confirmations,
                     credited: true,
                     transactionId: transaction?.id
+                })
+            );
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
+        }
+    }
+
+    /**
+     * Provide deposit review data once deposit is confirmed
+     * - projection data
+     * - recommended assets
+     */
+    public static async getDepositReview(req: Request, res: Response) {
+        try {
+            const userId = (req as AuthenticatedRequest).userId;
+            if (!userId) {
+                return res.send(super.response(super._401, null, ['Not authenticated']));
+            }
+
+            const { depositSessionId } = req.body || {};
+            if (!depositSessionId) {
+                return res.send(super.response(super._400, null, ['depositSessionId is required']));
+            }
+
+            const sessionRepo = new DepositSessionRepository();
+            const userRepo = new UserRepository();
+            const marketDataRepo = new MarketDataRepository();
+
+            const session = await sessionRepo.getById(depositSessionId);
+            if (!session || session.userId !== userId) {
+                return res.send(super.response(super._404, null, ['Deposit session not found']));
+            }
+
+            if (session.status !== 'CONFIRMED') {
+                return res.send(
+                    super.response(super._400, null, ['Deposit must be confirmed before review'])
+                );
+            }
+
+            const user = await userRepo.getById(userId);
+            if (!user) {
+                return res.send(super.response(super._404, null, ['User not found']));
+            }
+
+            const depositAmount = Number(session.matchedAmount || session.expectedAmount || 0);
+            if (depositAmount <= 0) {
+                return res.send(super.response(super._400, null, ['Invalid deposit amount']));
+            }
+
+            const allocation = {
+                stableYields: user.targetStableYieldsPercent || 80,
+                tokenizedStocks: user.targetTokenizedStocksPercent || 15,
+                tokenizedGold: user.targetTokenizedGoldPercent || 5,
+            };
+
+            const classKeys = [
+                { key: 'stable_yields', weight: allocation.stableYields, defaultReturn: 0.05 },
+                { key: 'tokenized_stocks', weight: allocation.tokenizedStocks, defaultReturn: 0.1 },
+                { key: 'tokenized_gold', weight: allocation.tokenizedGold, defaultReturn: 0.04 },
+            ] as const;
+
+            const assets = [] as Array<{
+                symbol: string;
+                name: string;
+                classKey: string;
+                price: number;
+                change: number;
+                changePercent: number;
+            }>;
+
+            let expectedAnnualReturn = 0;
+
+            for (const assetClass of classKeys) {
+                const primaryAsset = await assetRegistry.getPrimaryAssetByClassKey(assetClass.key);
+                if (!primaryAsset) continue;
+
+                const marketData = await marketDataRepo.getAssetData(primaryAsset.symbol as AssetSymbol);
+                const apy = marketData?.currentApy != null
+                    ? Number(marketData.currentApy) / 100
+                    : assetClass.defaultReturn;
+
+                expectedAnnualReturn += (assetClass.weight / 100) * apy;
+
+                assets.push({
+                    symbol: primaryAsset.symbol,
+                    name: primaryAsset.name,
+                    classKey: assetClass.key,
+                    price: marketData?.price != null ? Number(marketData.price) : 1,
+                    change: marketData?.change24h != null ? Number(marketData.change24h) : 0,
+                    changePercent: marketData?.changePercent24h != null ? Number(marketData.changePercent24h) : 0,
+                });
+            }
+
+            const sortedAssets = assets.sort((a, b) => {
+                const weightA = classKeys.find(k => k.key === a.classKey)?.weight || 0;
+                const weightB = classKeys.find(k => k.key === b.classKey)?.weight || 0;
+                return weightB - weightA;
+            });
+
+            const monthlyRate = expectedAnnualReturn / 12;
+            const projection = [] as Array<{ date: string; investment: number; returns: number }>;
+
+            const now = new Date();
+            for (let i = 0; i < 12; i++) {
+                const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
+                const compounded = Math.pow(1 + monthlyRate, i + 1);
+                const returns = depositAmount * (compounded - 1);
+                projection.push({
+                    date: date.toISOString(),
+                    investment: Number(depositAmount.toFixed(2)),
+                    returns: Number(returns.toFixed(2)),
+                });
+            }
+
+            return res.send(
+                super.response(super._200, {
+                    depositSessionId,
+                    amountUsd: depositAmount,
+                    allocation,
+                    projection,
+                    assets: sortedAssets,
+                    description: 'Based on your target allocation, these assets match your risk and growth profile.'
                 })
             );
         } catch (error) {
