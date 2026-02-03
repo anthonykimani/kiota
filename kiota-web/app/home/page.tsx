@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { ChartAreaLinear } from '@/components/custom/chart-area-linear'
+import { ChartAreaLinear, type ChartDataPoint } from '@/components/custom/chart-area-linear'
 import { ScreenWrapper } from '@/components/custom/screen-wrapper'
 import { ActionCard } from '@/components/custom/action-card'
 import { BottomNav } from '@/components/custom/bottom-nav'
@@ -9,28 +9,66 @@ import { PortfolioOverview } from '@/components/custom/portfolio-overview'
 import { MarketPerformance } from '@/components/custom/market-performance'
 import { CryptoTradingBot, EyeClosed, HedgeFund } from '@/lib/svg'
 import { 
-    hasAssets, 
-    sampleUserPortfolio, 
     marketPerformanceAssets,
     formatCurrency,
     formatChange,
-    type UserPortfolio 
+    type UserPortfolio,
+    type AssetClassData
 } from '@/lib/helpers'
+import { UsdcSvg, TslaSvg } from '@/lib/svg'
 import Image from 'next/image'
-import React from 'react'
-
-// For demo purposes - toggle this to see different states
-const DEMO_HAS_ASSETS = true
+import React, { useMemo } from 'react'
+import { useDashboard } from '@/hooks/use-dashboard'
+import { useAuth } from '@/context/auth-context'
 
 const HomePage = () => {
     const router = useRouter()
-    
-    // In real app, this would come from API/state
-    const portfolio: UserPortfolio | null = DEMO_HAS_ASSETS ? sampleUserPortfolio : null
-    const userHasAssets = hasAssets(portfolio)
+    const { isAuthenticated, isLoading: authLoading, user } = useAuth()
+    const { data: dashboard, isLoading: dashboardLoading, error } = useDashboard()
+
+    // Transform API dashboard data to UserPortfolio format
+    const portfolio: UserPortfolio | null = useMemo(() => {
+        if (!dashboard?.portfolio || dashboard.portfolio.totalValueUsd <= 0) {
+            return null
+        }
+
+        // Map API assets to local format
+        const assetClasses: AssetClassData[] = dashboard.assets.map(asset => {
+            const assetClassMap: Record<string, 'preservation' | 'growth' | 'hedge'> = {
+                'stable_yields': 'preservation',
+                'tokenized_stocks': 'growth',
+                'tokenized_gold': 'hedge',
+            }
+
+            return {
+                assetClass: assetClassMap[asset.classKey] || 'preservation',
+                totalValue: asset.valueUsd,
+                assets: [{
+                    icon: asset.classKey === 'stable_yields' ? UsdcSvg : 
+                          asset.classKey === 'tokenized_stocks' ? TslaSvg : UsdcSvg,
+                    ticker: asset.primaryAssetSymbol || asset.classKey.toUpperCase(),
+                    name: asset.name,
+                    symbol: asset.primaryAssetSymbol || '',
+                    price: asset.valueUsd,
+                    change: asset.monthlyEarnings,
+                    changePercent: asset.percentage,
+                }]
+            }
+        })
+
+        return {
+            totalValue: dashboard.portfolio.totalValueUsd,
+            totalChange: dashboard.portfolio.monthlyChange,
+            totalChangePercent: dashboard.portfolio.monthlyChangePercent,
+            assetClasses,
+        }
+    }, [dashboard])
+
+    const userHasAssets = portfolio !== null && portfolio.totalValue > 0
+    const isLoading = authLoading || dashboardLoading
 
     const handleSetupPortfolio = () => {
-        router.push('/quiz')
+        router.push('/portfolio')
     }
 
     const handleExploreMarkets = () => {
@@ -43,9 +81,47 @@ const HomePage = () => {
         router.push('/portfolio')
     }
 
+    // Show loading state
+    if (isLoading) {
+        return (
+            <div>
+                <ScreenWrapper className="py-6 gap-y-6 pb-24">
+                    <div className="animate-pulse space-y-4">
+                        <div className="h-8 bg-kiota-card rounded w-32"></div>
+                        <div className="h-12 bg-kiota-card rounded w-48"></div>
+                        <div className="h-48 bg-kiota-card rounded"></div>
+                    </div>
+                </ScreenWrapper>
+                <BottomNav />
+            </div>
+        )
+    }
+
+    // Show error state
+    if (error) {
+        return (
+            <div>
+                <ScreenWrapper className="py-6 gap-y-6 pb-24">
+                    <div className="text-center">
+                        <p className="text-red-500">Failed to load dashboard</p>
+                        <p className="text-sm text-kiota-text-secondary">{error}</p>
+                    </div>
+                </ScreenWrapper>
+                <BottomNav />
+            </div>
+        )
+    }
+
+    const displayName = dashboard?.user?.firstName || user?.firstName || 'there'
+
     return (
         <div>
             <ScreenWrapper className="py-6 gap-y-6 pb-24">
+                {/* Greeting */}
+                {displayName && (
+                    <p className="text-kiota-text-secondary">Hi, {displayName}!</p>
+                )}
+
                 {/* Header - Total Assets */}
                 <div className='flex justify-between items-center'>
                     <div className="space-y-1">
@@ -66,7 +142,7 @@ const HomePage = () => {
                 </div>
 
                 {/* Chart */}
-                <ChartAreaLinear />
+                <ChartAreaLinear hasAssets={userHasAssets} />
 
                 {/* Content based on whether user has assets */}
                 {userHasAssets ? (
@@ -77,15 +153,37 @@ const HomePage = () => {
                         {/* Market Performance */}
                         <MarketPerformance assets={marketPerformanceAssets} />
 
-                        {/* Investment Goals - still show action card if no goals */}
-                        <ActionCard
-                            sectionTitle="My Investment Goals"
-                            image={CryptoTradingBot}
-                            title="You have no goals"
-                            subtitle="You haven't set up any goals. Let's set it up today!"
-                            buttonText="Setup Now"
-                            onButtonClick={handleSetupGoals}
-                        />
+                        {/* Investment Goals */}
+                        {dashboard?.goals && dashboard.goals.length > 0 ? (
+                            <div className="space-y-3">
+                                <h2 className="text-lg font-semibold">My Investment Goals</h2>
+                                {dashboard.goals.map(goal => (
+                                    <div key={goal.id} className="bg-kiota-card p-4 rounded-lg">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-2xl">{goal.emoji}</span>
+                                            <div className="flex-1">
+                                                <p className="font-medium">{goal.title}</p>
+                                                <p className="text-sm text-kiota-text-secondary">
+                                                    {formatCurrency(goal.currentAmount)} / {formatCurrency(goal.targetAmount)}
+                                                </p>
+                                            </div>
+                                            <span className={`text-sm ${goal.onTrack ? 'text-green-500' : 'text-yellow-500'}`}>
+                                                {goal.progressPercent}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <ActionCard
+                                sectionTitle="My Investment Goals"
+                                image={CryptoTradingBot}
+                                title="You have no goals"
+                                subtitle="You haven't set up any goals. Let's set it up today!"
+                                buttonText="Setup Now"
+                                onButtonClick={handleSetupGoals}
+                            />
+                        )}
                     </div>
                 ) : (
                     <div className="flex flex-col gap-y-6">
