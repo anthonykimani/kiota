@@ -4,9 +4,14 @@ import { TransactionRepository } from '../../repositories/transaction.repo';
 import { PortfolioRepository } from '../../repositories/portfolio.repo';
 import { UserRepository } from '../../repositories/user.repo';
 import { WalletRepository } from '../../repositories/wallet.repo';
-import { createPublicClient, formatUnits, http, parseAbiItem } from 'viem';
-import { baseSepolia } from 'viem/chains';
+import { formatUnits, parseAbiItem } from 'viem';
 import { createLogger } from '../../utils/logger.util';
+import {
+  createChainClient,
+  getUsdcAddress,
+  getRequiredConfirmations,
+  getCurrentNetwork,
+} from '../../configs/chain.config';
 
 /**
  * Job data structure for onchain deposit confirmation
@@ -16,17 +21,10 @@ export interface OnchainDepositConfirmationJobData {
   userId: string;
 }
 
-const BASE_RPC_URL = process.env.BASE_RPC_URL || '';
-const BASE_USDC_ADDRESS = process.env.BASE_USDC_ADDRESS || '';
-const DEPOSIT_CONFIRMATIONS_REQUIRED = Number(
-  process.env.DEPOSIT_CONFIRMATIONS_REQUIRED || 2
-);
-
-// Viem public client for blockchain queries
-const baseClient = createPublicClient({
-  chain: baseSepolia,
-  transport: http(BASE_RPC_URL),
-});
+// Use chain config for network-aware settings
+const baseClient = createChainClient();
+const BASE_USDC_ADDRESS = getUsdcAddress();
+const DEPOSIT_CONFIRMATIONS_REQUIRED = getRequiredConfirmations();
 
 // USDC Transfer event ABI
 const TRANSFER_EVENT = parseAbiItem(

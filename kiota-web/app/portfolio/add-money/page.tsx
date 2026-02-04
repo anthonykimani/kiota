@@ -50,13 +50,17 @@ const depositMethods: DepositMethodOption[] = [
   },
 ]
 
+type DepositStatus = 'idle' | 'awaiting' | 'received' | 'confirmed'
+
 const AddMoneyPage = () => {
   const router = useRouter()
   const { wallet } = useAuth()
   const [selectedMethod, setSelectedMethod] = useState<DepositMethod>('mpesa')
   const [copied, setCopied] = useState(false)
   const [depositAddress, setDepositAddress] = useState<string | null>(null)
+  const [depositSessionId, setDepositSessionId] = useState<string | null>(null)
   const [isLoadingAddress, setIsLoadingAddress] = useState(false)
+  const [depositStatus, setDepositStatus] = useState<DepositStatus>('idle')
 
   const selectedMethodData = depositMethods.find(m => m.id === selectedMethod)
 
@@ -67,12 +71,59 @@ const AddMoneyPage = () => {
     }
   }, [selectedMethod])
 
+  // Poll for deposit confirmation when crypto is selected and we have a session
+  useEffect(() => {
+    if (selectedMethod !== 'crypto' || !depositSessionId) return
+
+    let isActive = true
+    let intervalId: ReturnType<typeof setInterval> | null = null
+
+    const pollForDeposit = async () => {
+      try {
+        const response = await depositApi.confirmDeposit(depositSessionId)
+        const status = response.data?.status
+
+        if (!isActive) return
+
+        if (status === 'CONFIRMED') {
+          setDepositStatus('confirmed')
+          if (intervalId) clearInterval(intervalId)
+          // Navigate to review page
+          router.push('/portfolio/review-deposit')
+          return
+        }
+
+        if (status === 'RECEIVED') {
+          setDepositStatus('received')
+          // Keep polling until confirmed
+          return
+        }
+
+        setDepositStatus('awaiting')
+      } catch (err) {
+        // Silently continue polling on error
+        console.error('Deposit poll error:', err)
+      }
+    }
+
+    // Start polling
+    pollForDeposit()
+    intervalId = setInterval(pollForDeposit, 5000) // Poll every 5 seconds
+
+    return () => {
+      isActive = false
+      if (intervalId) clearInterval(intervalId)
+    }
+  }, [selectedMethod, depositSessionId, router])
+
   const fetchDepositAddress = async () => {
     setIsLoadingAddress(true)
     try {
       const response = await depositApi.createIntent(undefined, 'USDC', 'base')
       if (response.data) {
         setDepositAddress(response.data.depositAddress)
+        setDepositSessionId(response.data.depositSessionId)
+        setDepositStatus('awaiting')
         if (typeof window !== 'undefined') {
           localStorage.setItem('kiota_deposit_session_id', response.data.depositSessionId)
         }
@@ -254,6 +305,25 @@ const AddMoneyPage = () => {
               Only send USDC on the Base network to this address. Sending other tokens or using a different network may result in permanent loss of funds.
             </p>
           </div>
+
+          {/* Deposit Status Indicator */}
+          {depositStatus === 'awaiting' && (
+            <div className="w-full p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center gap-3">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
+              <p className="text-xs text-blue-400">
+                Waiting for deposit... Send USDC to the address above.
+              </p>
+            </div>
+          )}
+
+          {depositStatus === 'received' && (
+            <div className="w-full p-3 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center gap-3">
+              <div className="animate-pulse rounded-full h-4 w-4 bg-green-500" />
+              <p className="text-xs text-green-400">
+                Deposit detected! Waiting for network confirmations...
+              </p>
+            </div>
+          )}
         </div>
       )}
 

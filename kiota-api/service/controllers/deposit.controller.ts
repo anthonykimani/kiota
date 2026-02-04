@@ -5,24 +5,28 @@ import { UserRepository } from '../repositories/user.repo';
 import { MarketDataRepository } from '../repositories/market-data.repo';
 import { WalletRepository } from '../repositories/wallet.repo';
 import Controller from './controller';
-import { createPublicClient, formatUnits, http, parseAbi, parseAbiItem } from 'viem';
+import { formatUnits, parseAbi, parseAbiItem } from 'viem';
 import { AuthenticatedRequest } from '../interfaces/IAuth';
 
 import { DepositSessionRepository } from '../repositories/deposit-session.repo';
-import { baseSepolia } from 'viem/chains';
 import { DEPOSIT_COMPLETION_QUEUE, ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE } from '../configs/queue.config';
 import { assetRegistry } from '../services/asset-registry.service';
 import { AssetSymbol } from '../enums/MarketData';
+import { 
+    createChainClient, 
+    getUsdcAddress, 
+    getRequiredConfirmations,
+    getCurrentNetwork,
+    logChainConfig 
+} from '../configs/chain.config';
 
-const BASE_RPC_URL = process.env.BASE_RPC_URL || '';
-const BASE_USDC_ADDRESS = process.env.BASE_USDC_ADDRESS || '';
-const DEPOSIT_CONFIRMATIONS_REQUIRED = Number(process.env.DEPOSIT_CONFIRMATIONS_REQUIRED || 2);
+// Log chain config on module load (helpful for debugging)
+logChainConfig();
 
-// Viem public client
-const baseClient = createPublicClient({
-    chain: baseSepolia,
-    transport: http(BASE_RPC_URL),
-});
+// Use chain config for network-aware client
+const baseClient = createChainClient();
+const BASE_USDC_ADDRESS = getUsdcAddress();
+const DEPOSIT_CONFIRMATIONS_REQUIRED = getRequiredConfirmations();
 
 // Viem ABI (minimal)
 const ERC20_ABI = parseAbi([
@@ -60,10 +64,10 @@ class DepositController extends Controller {
             if (normalizedToken !== 'USDC') {
                 return res.send(super.response(super._400, null, ['Only USDC is supported in MVP']));
             }
-            if (!BASE_RPC_URL || !BASE_USDC_ADDRESS) {
+            if (!BASE_USDC_ADDRESS) {
                 return res.send(
                     super.response(super._500, null, [
-                        'Missing BASE_RPC_URL or BASE_USDC_ADDRESS env vars'
+                        'Chain configuration error: USDC address not set'
                     ])
                 );
             }
@@ -167,14 +171,6 @@ class DepositController extends Controller {
             if (!userId) {
                 return res.send(super.response(super._401, null, ['Not authenticated']));
             }
-            if (!BASE_RPC_URL || !BASE_USDC_ADDRESS) {
-                return res.send(
-                    super.response(super._500, null, [
-                        'Missing BASE_RPC_URL or BASE_USDC_ADDRESS env vars'
-                    ])
-                );
-            }
-
             const { depositSessionId } = req.body || {};
             if (!depositSessionId) {
                 return res.send(super.response(super._400, null, ['depositSessionId is required']));

@@ -62,6 +62,16 @@ export const TOKEN_ADDRESSES: Record<string, Record<AssetType, string>> = {
     BCSPX: '0x0000000000000000000000000000000000000000', // TODO: BCSPX not on Base yet
     PAXG: '0x0000000000000000000000000000000000000000', // TODO: PAXG not on Base yet
   },
+
+  /**
+   * Base Sepolia Testnet (Chain ID: 84532)
+   */
+  'base-sepolia': {
+    USDC: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', // Circle USDC on Base Sepolia
+    USDM: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
+    BCSPX: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
+    PAXG: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
+  },
 };
 
 /**
