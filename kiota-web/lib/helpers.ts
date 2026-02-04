@@ -151,13 +151,17 @@ export const sampleUserPortfolio: UserPortfolio = {
     ],
 }
 
-export function formatCurrency(value: number): string {
-    return `$${value.toFixed(2)}`
+export function formatCurrency(value: unknown): string {
+    const num = Number(value)
+    if (isNaN(num)) return '$0.00'
+    return `$${num.toFixed(2)}`
 }
 
-export function formatChange(change: number, changePercent: number): string {
-    const sign = change >= 0 ? '+' : ''
-    return `${sign}${change.toFixed(2)} (${sign}${changePercent.toFixed(2)}%)`
+export function formatChange(change: unknown, changePercent: unknown): string {
+    const safeChange = Number(change) || 0
+    const safePercent = Number(changePercent) || 0
+    const sign = safeChange >= 0 ? '+' : ''
+    return `${sign}${safeChange.toFixed(2)} (${sign}${safePercent.toFixed(2)}%)`
 }
 
 export function hasAssets(portfolio: UserPortfolio | null): boolean {

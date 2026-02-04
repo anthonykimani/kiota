@@ -19,12 +19,14 @@ import { UsdcSvg, TslaSvg } from '@/lib/svg'
 import Image from 'next/image'
 import React, { useMemo } from 'react'
 import { useDashboard } from '@/hooks/use-dashboard'
+import { usePortfolio } from '@/hooks/use-portfolio'
 import { useAuth } from '@/context/auth-context'
 
 const HomePage = () => {
     const router = useRouter()
     const { isAuthenticated, isLoading: authLoading, user } = useAuth()
     const { data: dashboard, isLoading: dashboardLoading, error } = useDashboard()
+    const { data: portfolioDetail } = usePortfolio('1M') // Get 1 month history for chart
 
     // Transform API dashboard data to UserPortfolio format
     const portfolio: UserPortfolio | null = useMemo(() => {
@@ -66,6 +68,18 @@ const HomePage = () => {
 
     const userHasAssets = portfolio !== null && portfolio.totalValue > 0
     const isLoading = authLoading || dashboardLoading
+
+    // Transform portfolio history to chart data format
+    const chartData: ChartDataPoint[] = useMemo(() => {
+        if (!portfolioDetail?.history || portfolioDetail.history.length === 0) {
+            return []
+        }
+
+        return portfolioDetail.history.map(point => ({
+            date: new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            value: Number(point.value) || 0,
+        }))
+    }, [portfolioDetail?.history])
 
     const handleSetupPortfolio = () => {
         router.push('/portfolio')
@@ -142,7 +156,7 @@ const HomePage = () => {
                 </div>
 
                 {/* Chart */}
-                <ChartAreaLinear hasAssets={userHasAssets} />
+                <ChartAreaLinear data={chartData} hasAssets={userHasAssets} />
 
                 {/* Content based on whether user has assets */}
                 {userHasAssets ? (
