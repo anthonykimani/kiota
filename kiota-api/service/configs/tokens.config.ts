@@ -1,16 +1,18 @@
 /**
  * Token Configuration
  *
- * Token addresses for supported networks (Ethereum Mainnet and Sepolia)
+ * Token addresses for supported networks (Ethereum Mainnet)
  *
  * Asset Types:
  * - USDC: Circle USD Coin (deposit currency)
- * - USDM: USD Stablecoin (target for stableYields allocation)
- * - BCSPX: Backed CSP Index Token (target for tokenizedStocks allocation)
+ * - USDM: Mountain Protocol USD (target for stableYields allocation)
+ * - IVVON: iShares S&P 500 ETF - Ondo Tokenized (target for tokenizedStocks allocation)
  * - PAXG: Paxos Gold Token (target for tokenizedGold allocation)
+ * 
+ * Note: 1inch only supports mainnet. Testnets have no liquidity for swaps.
  */
 
-export type AssetType = 'USDC' | 'USDM' | 'BCSPX' | 'PAXG';
+export type AssetType = 'USDC' | 'USDM' | 'IVVON' | 'PAXG';
 
 export interface TokenInfo {
   symbol: AssetType;
@@ -21,56 +23,29 @@ export interface TokenInfo {
 
 /**
  * Token addresses by network
+ * 
+ * IMPORTANT: Only Ethereum mainnet has liquidity for all tokens via 1inch
  */
 export const TOKEN_ADDRESSES: Record<string, Record<AssetType, string>> = {
   /**
-   * Ethereum Mainnet (Chain ID: 1)
+   * Ethereum Mainnet (Chain ID: 1) - PRIMARY NETWORK
+   * All tokens verified to have liquidity on 1inch
    */
   'ethereum': {
-    USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // Circle USDC on Ethereum
-    USDM: '0x59D9356E565Ab3A36dD77763Fc0d87fEaf85508C', // Mountain Protocol USDM
-    BCSPX: '0x4d49fcf93f415AdF54E9a62ab6e224f6d308D026', // Backed CSP Index Token
+    USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // Circle USDC
+    USDM: '0x59D9356E565Ab3A36dD77763Fc0d87fEaf85508C', // Mountain Protocol USD (yield-bearing)
+    IVVON: '0x62ca254a363dc3c748e7e955c20447ab5bf06ff7', // iShares S&P 500 ETF (Ondo Tokenized)
     PAXG: '0x45804880De22913dAFE09f4980848ECE6EcbAf78', // Paxos Gold
   },
-
-  /**
-   * Ethereum Sepolia Testnet (Chain ID: 11155111)
-   */
-  'ethereum-sepolia': {
-    USDC: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // Circle USDC on Sepolia
-    USDM: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
-    BCSPX: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
-    PAXG: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
-  },
-
-  /**
-   * Alias: 'sepolia' maps to 'ethereum-sepolia'
-   */
-  'sepolia': {
-    USDC: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // Circle USDC on Sepolia
-    USDM: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
-    BCSPX: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
-    PAXG: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
-  },
-
   /**
    * Base Mainnet (Chain ID: 8453)
+   * Note: Tokenized stocks and gold are not currently available on Base.
    */
   'base': {
     USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // Circle USDC on Base
-    USDM: '0x0000000000000000000000000000000000000000', // TODO: USDM not on Base yet
-    BCSPX: '0x0000000000000000000000000000000000000000', // TODO: BCSPX not on Base yet
-    PAXG: '0x0000000000000000000000000000000000000000', // TODO: PAXG not on Base yet
-  },
-
-  /**
-   * Base Sepolia Testnet (Chain ID: 84532)
-   */
-  'base-sepolia': {
-    USDC: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', // Circle USDC on Base Sepolia
-    USDM: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
-    BCSPX: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
-    PAXG: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
+    USDM: '0x59D9356E565Ab3A36dD77763Fc0d87fEaf85508C', // Mountain Protocol USD (if supported)
+    IVVON: '0x0000000000000000000000000000000000000000', // Not available on Base
+    PAXG: '0x0000000000000000000000000000000000000000', // Not available on Base
   },
 };
 
@@ -84,11 +59,11 @@ export const TOKEN_METADATA: Record<AssetType, { decimals: number; name: string 
   },
   USDM: {
     decimals: 18,
-    name: 'USD Mountain',
+    name: 'Mountain Protocol USD',
   },
-  BCSPX: {
+  IVVON: {
     decimals: 18,
-    name: 'Backed CSP Index Token',
+    name: 'iShares S&P 500 ETF (Ondo)',
   },
   PAXG: {
     decimals: 18,
@@ -108,7 +83,7 @@ export function getTokenAddress(asset: AssetType, network: string): string {
 
   if (address === '0x0000000000000000000000000000000000000000') {
     throw new Error(
-      `Token ${asset} not deployed on ${network} testnet. Please update tokens.config.ts with testnet address.`
+      `Token ${asset} is not available on ${network}. Please update tokens.config.ts with a supported address.`
     );
   }
 
@@ -134,7 +109,7 @@ export function getTokenInfo(asset: AssetType, network: string): TokenInfo {
  * Get all supported assets
  */
 export function getSupportedAssets(): AssetType[] {
-  return ['USDC', 'USDM', 'BCSPX', 'PAXG'];
+  return ['USDC', 'USDM', 'IVVON', 'PAXG'];
 }
 
 /**
@@ -150,7 +125,7 @@ export function isAssetSupported(asset: string): asset is AssetType {
 export function getCategoryAsset(category: 'stableYields' | 'tokenizedStocks' | 'tokenizedGold'): AssetType {
   const mapping: Record<string, AssetType> = {
     stableYields: 'USDM',
-    tokenizedStocks: 'BCSPX',
+    tokenizedStocks: 'IVVON',
     tokenizedGold: 'PAXG',
   };
 
@@ -164,7 +139,7 @@ export function getAssetCategory(asset: AssetType): 'stableYields' | 'tokenizedS
   const mapping: Record<AssetType, 'stableYields' | 'tokenizedStocks' | 'tokenizedGold' | null> = {
     USDC: null, // USDC is deposit currency, not held long-term
     USDM: 'stableYields',
-    BCSPX: 'tokenizedStocks',
+    IVVON: 'tokenizedStocks',
     PAXG: 'tokenizedGold',
   };
 

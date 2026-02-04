@@ -63,6 +63,10 @@ class BalanceUpdaterService {
     const fromClassKey = await assetRegistry.getAssetClassKeyBySymbol(fromAsset);
     const toClassKey = await assetRegistry.getAssetClassKeyBySymbol(toAsset);
 
+    const isCashAsset = (symbol: string) => symbol.toUpperCase() === 'USDC';
+    const fromIsCash = isCashAsset(fromAsset);
+    const toIsCash = isCashAsset(toAsset);
+
     logger.info('Starting atomic balance update after swap', {
       userId,
       fromAsset,
@@ -102,7 +106,7 @@ class BalanceUpdaterService {
 
       // Decrement source asset
       const fromCategory = this.normalizeClassKey(fromClassKey);
-      if (fromCategory) {
+      if (fromCategory && !fromIsCash) {
         const fromField = this.getCategoryField(fromCategory);
         (portfolioUpdates as any)[fromField] = Number(portfolio[fromField]) - fromAmount;
         logger.debug(`Decrementing ${fromCategory}`, {
@@ -115,7 +119,7 @@ class BalanceUpdaterService {
 
       // Increment destination asset
       const toCategory = this.normalizeClassKey(toClassKey);
-      if (toCategory) {
+      if (toCategory && !toIsCash) {
         const toField = this.getCategoryField(toCategory);
         (portfolioUpdates as any)[toField] =
           ((portfolioUpdates as any)[toField] !== undefined
@@ -180,18 +184,29 @@ class BalanceUpdaterService {
       const walletUpdates: Partial<Wallet> = {};
 
       // Decrement source balance
-      if (fromCategory) {
+      if (fromCategory && !fromIsCash) {
         const fromBalanceField = this.getBalanceField(fromCategory);
         (walletUpdates as any)[fromBalanceField] = Number(wallet[fromBalanceField]) - fromAmount;
       }
 
+      if (fromIsCash) {
+        (walletUpdates as any).usdcBalance = Number(wallet.usdcBalance) - fromAmount;
+      }
+
       // Increment destination balance
-      if (toCategory) {
+      if (toCategory && !toIsCash) {
         const toBalanceField = this.getBalanceField(toCategory);
         (walletUpdates as any)[toBalanceField] =
           ((walletUpdates as any)[toBalanceField] !== undefined
             ? Number((walletUpdates as any)[toBalanceField])
             : Number(wallet[toBalanceField])) + toAmount;
+      }
+
+      if (toIsCash) {
+        const base = (walletUpdates as any).usdcBalance !== undefined
+          ? Number((walletUpdates as any).usdcBalance)
+          : Number(wallet.usdcBalance);
+        (walletUpdates as any).usdcBalance = base + toAmount;
       }
 
       walletUpdates.balancesLastUpdated = new Date();
@@ -202,7 +217,7 @@ class BalanceUpdaterService {
       await walletRepo.update({ userId }, walletUpdates);
 
       if (portfolio) {
-        if (fromAsset) {
+        if (fromAsset && fromAsset.toUpperCase() !== 'USDC') {
           const existingFrom = await holdingRepo.findOne({
             where: { portfolioId: portfolio.id, assetSymbol: fromAsset },
           });
@@ -227,7 +242,7 @@ class BalanceUpdaterService {
           await holdingRepo.save(fromHolding);
         }
 
-        if (toAsset) {
+        if (toAsset && toAsset.toUpperCase() !== 'USDC') {
           const existingTo = await holdingRepo.findOne({
             where: { portfolioId: portfolio.id, assetSymbol: toAsset },
           });
@@ -317,6 +332,7 @@ class BalanceUpdaterService {
       };
 
       const walletChanges = {
+        usdcBalance: 0,
         stableYieldBalance: 0,
         tokenizedStocksBalance: 0,
         tokenizedGoldBalance: 0,
@@ -340,7 +356,10 @@ class BalanceUpdaterService {
         const fromCategory = this.normalizeClassKey(fromClassKey);
         const toCategory = this.normalizeClassKey(toClassKey);
 
-        if (fromCategory) {
+        // Handle USDC as source (cash being converted to portfolio assets)
+        if (fromAsset === 'USDC') {
+          walletChanges.usdcBalance -= fromAmount;
+        } else if (fromCategory) {
           portfolioChanges[fromCategory] -= fromAmount;
           walletChanges[this.getBalanceFieldSimple(fromCategory)] -= fromAmount;
         }
@@ -448,6 +467,7 @@ class BalanceUpdaterService {
 
       // Apply accumulated changes to wallet
       const walletUpdates: Partial<Wallet> = {
+        usdcBalance: Number(wallet.usdcBalance) + walletChanges.usdcBalance,
         stableYieldBalance: Number(wallet.stableYieldBalance) + walletChanges.stableYieldBalance,
         tokenizedStocksBalance:
           Number(wallet.tokenizedStocksBalance) + walletChanges.tokenizedStocksBalance,

@@ -30,7 +30,7 @@ export enum AssetType {
   KES = 'kes',
   USDC = 'usdc',
   USDM = 'usdm',
-  BCSPX = 'bcspx',
+  IVVON = 'ivvon',
   PAXG = 'paxg',
   BTC = 'btc',
   ETH = 'eth',

@@ -52,6 +52,6 @@ export const DEFAULT_ASSETS: Array<{
 }> = [
   { symbol: 'USDC', name: 'USD Coin', classKey: 'cash', decimals: 6, isPrimary: true },
   { symbol: 'USDM', name: 'USD Mountain', classKey: 'stable_yields', decimals: 18, isPrimary: true },
-  { symbol: 'BCSPX', name: 'Backed CSP Index Token', classKey: 'tokenized_stocks', decimals: 18, isPrimary: true },
+  { symbol: 'IVVON', name: 'iShares S&P 500 ETF (Ondo)', classKey: 'tokenized_stocks', decimals: 18, isPrimary: true },
   { symbol: 'PAXG', name: 'Paxos Gold', classKey: 'tokenized_gold', decimals: 18, isPrimary: true },
 ];

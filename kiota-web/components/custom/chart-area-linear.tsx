@@ -95,7 +95,11 @@ export function ChartAreaLinear({ data, hasAssets = false }: ChartAreaLinearProp
           tickLine={false}
           axisLine={false}
           tickMargin={8}
-          tickFormatter={(value) => typeof value === 'string' ? value.slice(0, 3) : value}
+          interval="preserveStartEnd"
+          tickFormatter={(value) => {
+            if (value == null || value === '') return ''
+            return String(value)
+          }}
         />
         <YAxis 
           domain={yDomain} 
@@ -108,7 +112,11 @@ export function ChartAreaLinear({ data, hasAssets = false }: ChartAreaLinearProp
               <ChartTooltipContent 
                 indicator="dot" 
                 hideLabel 
-                formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Balance']}
+                formatter={(value) => {
+                  const num = Number(value)
+                  if (isNaN(num)) return ['$0.00', 'Balance']
+                  return [`$${num.toFixed(2)}`, 'Balance']
+                }}
               />
             }
           />

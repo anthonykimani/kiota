@@ -54,13 +54,10 @@ class DepositController extends Controller {
                 return res.send(super.response(super._401, null, ['Not authenticated']));
             }
 
-            const { expectedAmount, token, chain } = req.body || {};
-            const normalizedChain = (chain || 'base').toLowerCase();
+            const { expectedAmount, token } = req.body || {};
+            const currentNetwork = getCurrentNetwork();
             const normalizedToken = (token || 'USDC').toUpperCase();
 
-            if (normalizedChain !== 'base') {
-                return res.send(super.response(super._400, null, ['Only Base is supported in MVP']));
-            }
             if (normalizedToken !== 'USDC') {
                 return res.send(super.response(super._400, null, ['Only USDC is supported in MVP']));
             }
@@ -109,7 +106,7 @@ class DepositController extends Controller {
             const session = await sessionRepo.create({
                 userId,
                 walletAddress: wallet.address,
-                chain: 'base',
+                chain: currentNetwork,
                 tokenSymbol: 'USDC',
                 tokenAddress: BASE_USDC_ADDRESS,
                 expectedAmount: expectedAmount ?? null,
@@ -150,7 +147,7 @@ class DepositController extends Controller {
                 super.response(super._201, {
                     depositSessionId: session.id,
                     depositAddress: wallet.address,
-                    chain: 'base',
+                    chain: currentNetwork,
                     token: { symbol: 'USDC', address: BASE_USDC_ADDRESS },
                     expiresAt
                 })
@@ -326,24 +323,12 @@ class DepositController extends Controller {
                 allocation
             });
 
-            // For MVP, we treat USDC amount as USD value directly.
-            await portfolioRepo.updateValues(userId, {
-                stableYieldsValueUsd: matched.amount * ((allocation.stableYields || 0) / 100),
-                tokenizedStocksValueUsd: matched.amount * ((allocation.tokenizedStocks || 0) / 100),
-                tokenizedGoldValueUsd: matched.amount * ((allocation.tokenizedGold || 0) / 100),
-                kesUsdRate: 0
+            // Treat onchain deposit as cash until user confirms conversion.
+            await walletRepo.incrementBalances(userId, {
+                usdcBalance: matched.amount
             });
 
             await portfolioRepo.recordDeposit(userId, matched.amount);
-            await portfolioRepo.calculateReturns(userId);
-
-            // OPTIONAL: You can stop writing category balances into wallet table for MVP,
-            // but keeping it won't break anything if your UI expects it.
-            await walletRepo.updateBalances(userId, {
-                stableYieldBalance: matched.amount * ((allocation.stableYields || 0) / 100),
-                tokenizedStocksBalance: matched.amount * ((allocation.tokenizedStocks || 0) / 100),
-                tokenizedGoldBalance: matched.amount * ((allocation.tokenizedGold || 0) / 100)
-            } as any);
 
             await sessionRepo.updateStatus(session.id, 'CONFIRMED');
 
@@ -431,7 +416,7 @@ class DepositController extends Controller {
                 const primaryAsset = await assetRegistry.getPrimaryAssetByClassKey(assetClass.key);
                 if (!primaryAsset) continue;
 
-                const marketData = await marketDataRepo.getAssetData(primaryAsset.symbol as AssetSymbol);
+                const marketData = await marketDataRepo.getAssetData(primaryAsset.symbol);
                 const apy = marketData?.currentApy != null
                     ? Number(marketData.currentApy) / 100
                     : assetClass.defaultReturn;
@@ -997,12 +982,25 @@ class DepositController extends Controller {
                 );
             }
 
+            const network = getCurrentNetwork();
+            try {
+                await assetRegistry.resolveAssetAddress(stableAsset, network);
+                await assetRegistry.resolveAssetAddress(stocksAsset, network);
+                await assetRegistry.resolveAssetAddress(goldAsset, network);
+            } catch (error) {
+                return res.send(
+                    super.response(super._400, null, [
+                        (error as Error).message || 'Asset not available on current network'
+                    ])
+                );
+            }
+
             // Create swap transactions for non-zero amounts
             const swapRepo = new SwapRepository();
             const createdSwaps = [];
 
             // Swap USDC → primary Stable Yields asset
-            if (stableYieldsAmount >= 1) {
+            if (stableYieldsAmount > 0) {
                 const estimatedToAmount = stableYieldsAmount * 0.998; // Assume 0.2% slippage
 
                 const transaction = await swapRepo.createSwap({
@@ -1046,7 +1044,7 @@ class DepositController extends Controller {
             }
 
             // Swap USDC → primary Tokenized Stocks asset
-            if (tokenizedStocksAmount >= 1) {
+            if (tokenizedStocksAmount > 0) {
                 const estimatedToAmount = tokenizedStocksAmount * 0.998;
 
                 const transaction = await swapRepo.createSwap({
@@ -1090,7 +1088,7 @@ class DepositController extends Controller {
             }
 
             // Swap USDC → primary Tokenized Gold asset
-            if (tokenizedGoldAmount >= 1) {
+            if (tokenizedGoldAmount > 0) {
                 const estimatedToAmount = tokenizedGoldAmount * 0.998;
 
                 const transaction = await swapRepo.createSwap({
@@ -1147,6 +1145,211 @@ class DepositController extends Controller {
                     tokenizedStocks: user.targetTokenizedStocksPercent || 15,
                     tokenizedGold: user.targetTokenizedGoldPercent || 5,
                 },
+            };
+
+            return res.send(super.response(super._201, conversionData));
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
+        }
+    }
+
+    /**
+     * Convert wallet USDC balance to user's target allocation
+     * Body:
+     * - amountUsd?: number (optional, defaults to full wallet balance)
+     */
+    public static async convertWalletBalance(req: Request, res: Response) {
+        try {
+            const userId = (req as AuthenticatedRequest).userId;
+            if (!userId) {
+                return res.send(super.response(super._401, null, ['Not authenticated']));
+            }
+
+            const { amountUsd } = req.body || {};
+
+            const { UserRepository } = await import('../repositories/user.repo');
+            const { WalletRepository } = await import('../repositories/wallet.repo');
+            const { SwapRepository } = await import('../repositories/swap.repo');
+            const { SWAP_EXECUTION_QUEUE } = await import('../configs/queue.config');
+            const { v4: uuidv4 } = await import('uuid');
+
+            const userRepo = new UserRepository();
+            const walletRepo = new WalletRepository();
+
+            const user = await userRepo.getById(userId);
+            const wallet = await walletRepo.getByUserId(userId);
+
+            if (!user || !wallet) {
+                return res.send(super.response(super._404, null, ['User or wallet not found']));
+            }
+
+            const availableBalance = Number(wallet.usdcBalance || 0);
+            const convertAmount = amountUsd != null ? Number(amountUsd) : availableBalance;
+
+            if (!convertAmount || convertAmount <= 0) {
+                return res.send(super.response(super._400, null, ['No USDC balance available to convert']));
+            }
+
+            if (convertAmount > availableBalance) {
+                return res.send(super.response(super._400, null, ['Amount exceeds wallet USDC balance']));
+            }
+
+            const allocation = {
+                stableYields: user.targetStableYieldsPercent || 80,
+                tokenizedStocks: user.targetTokenizedStocksPercent || 15,
+                tokenizedGold: user.targetTokenizedGoldPercent || 5,
+            };
+
+            const stableYieldsAmount = (convertAmount * allocation.stableYields) / 100;
+            const tokenizedStocksAmount = (convertAmount * allocation.tokenizedStocks) / 100;
+            const tokenizedGoldAmount = (convertAmount * allocation.tokenizedGold) / 100;
+
+            const conversionGroupId = uuidv4();
+
+            const stableAsset = await assetRegistry.getPrimaryAssetByClassKey('stable_yields');
+            const stocksAsset = await assetRegistry.getPrimaryAssetByClassKey('tokenized_stocks');
+            const goldAsset = await assetRegistry.getPrimaryAssetByClassKey('tokenized_gold');
+
+            if (!stableAsset || !stocksAsset || !goldAsset) {
+                return res.send(
+                    super.response(super._500, null, ['Missing primary assets for one or more classes'])
+                );
+            }
+
+            const swapRepo = new SwapRepository();
+            const createdSwaps = [];
+
+            if (stableYieldsAmount > 0) {
+                const estimatedToAmount = stableYieldsAmount * 0.998;
+                const transaction = await swapRepo.createSwap({
+                    userId,
+                    fromAsset: 'USDC',
+                    toAsset: stableAsset.symbol,
+                    fromAmount: stableYieldsAmount,
+                    estimatedToAmount,
+                    slippage: 1.0,
+                    metadata: {
+                        conversionGroupId,
+                        initiatedVia: 'wallet-conversion',
+                    },
+                    type: 'swap' as any,
+                });
+
+                await SWAP_EXECUTION_QUEUE.add(
+                    {
+                        transactionId: transaction.id,
+                        userId,
+                        fromAsset: 'USDC',
+                        toAsset: stableAsset.symbol,
+                        amount: stableYieldsAmount,
+                        slippage: 1.0,
+                    },
+                    {
+                        attempts: 3,
+                        backoff: { type: 'exponential', delay: 2000 },
+                        jobId: `swap-execute-${transaction.id}`,
+                        removeOnComplete: true,
+                        removeOnFail: false,
+                    }
+                );
+
+                createdSwaps.push({
+                    transactionId: transaction.id,
+                    toAsset: stableAsset.symbol,
+                    amount: stableYieldsAmount,
+                });
+            }
+
+            if (tokenizedStocksAmount > 0) {
+                const estimatedToAmount = tokenizedStocksAmount * 0.998;
+                const transaction = await swapRepo.createSwap({
+                    userId,
+                    fromAsset: 'USDC',
+                    toAsset: stocksAsset.symbol,
+                    fromAmount: tokenizedStocksAmount,
+                    estimatedToAmount,
+                    slippage: 1.0,
+                    metadata: {
+                        conversionGroupId,
+                        initiatedVia: 'wallet-conversion',
+                    },
+                    type: 'swap' as any,
+                });
+
+                await SWAP_EXECUTION_QUEUE.add(
+                    {
+                        transactionId: transaction.id,
+                        userId,
+                        fromAsset: 'USDC',
+                        toAsset: stocksAsset.symbol,
+                        amount: tokenizedStocksAmount,
+                        slippage: 1.0,
+                    },
+                    {
+                        attempts: 3,
+                        backoff: { type: 'exponential', delay: 2000 },
+                        jobId: `swap-execute-${transaction.id}`,
+                        removeOnComplete: true,
+                        removeOnFail: false,
+                    }
+                );
+
+                createdSwaps.push({
+                    transactionId: transaction.id,
+                    toAsset: stocksAsset.symbol,
+                    amount: tokenizedStocksAmount,
+                });
+            }
+
+            if (tokenizedGoldAmount > 0) {
+                const estimatedToAmount = tokenizedGoldAmount * 0.998;
+                const transaction = await swapRepo.createSwap({
+                    userId,
+                    fromAsset: 'USDC',
+                    toAsset: goldAsset.symbol,
+                    fromAmount: tokenizedGoldAmount,
+                    estimatedToAmount,
+                    slippage: 1.0,
+                    metadata: {
+                        conversionGroupId,
+                        initiatedVia: 'wallet-conversion',
+                    },
+                    type: 'swap' as any,
+                });
+
+                await SWAP_EXECUTION_QUEUE.add(
+                    {
+                        transactionId: transaction.id,
+                        userId,
+                        fromAsset: 'USDC',
+                        toAsset: goldAsset.symbol,
+                        amount: tokenizedGoldAmount,
+                        slippage: 1.0,
+                    },
+                    {
+                        attempts: 3,
+                        backoff: { type: 'exponential', delay: 2000 },
+                        jobId: `swap-execute-${transaction.id}`,
+                        removeOnComplete: true,
+                        removeOnFail: false,
+                    }
+                );
+
+                createdSwaps.push({
+                    transactionId: transaction.id,
+                    toAsset: goldAsset.symbol,
+                    amount: tokenizedGoldAmount,
+                });
+            }
+
+            const conversionData = {
+                conversionGroupId,
+                convertedAmount: convertAmount,
+                status: 'pending',
+                swaps: createdSwaps,
+                swapCount: createdSwaps.length,
+                estimatedCompletionTime: '5-10 minutes',
+                allocation,
             };
 
             return res.send(super.response(super._201, conversionData));

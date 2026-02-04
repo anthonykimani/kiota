@@ -15,6 +15,10 @@ export interface User {
 export interface Wallet {
   address: string
   provider: string
+  usdcBalance?: number
+  stableYieldBalance?: number
+  tokenizedStocksBalance?: number
+  tokenizedGoldBalance?: number
 }
 
 export interface Portfolio {
@@ -79,6 +83,9 @@ export interface DashboardAsset {
   apy?: number
   avgReturn?: number
   requiresTier2?: boolean
+  price?: number
+  change?: number
+  changePercent?: number
 }
 
 export interface DashboardGoal {
@@ -101,8 +108,30 @@ export interface Dashboard {
     totalPoints: number
     level: number
   }
+  chain?: {
+    id: string
+    name: string
+    isTestnet: boolean
+  }
+  onchain?: {
+    hasHoldings: boolean
+    totalValueUsd: number
+  }
+  wallet?: {
+    usdcBalance: number
+    stableYieldBalance: number
+    tokenizedStocksBalance: number
+    tokenizedGoldBalance: number
+  }
   portfolio: DashboardPortfolio
   assets: DashboardAsset[]
+  marketPerformance?: Array<{
+    symbol: string
+    name: string
+    price: number
+    change: number
+    changePercent: number
+  }>
   totalMonthlyEarnings: number
   goals: DashboardGoal[]
   quickActions: {

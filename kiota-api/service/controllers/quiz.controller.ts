@@ -300,7 +300,7 @@ class QuizController extends Controller {
 
         If you include defaultAssets, use the current primary tokens as examples:
         - Stable Yields: USDM
-        - Tokenized Stocks: BCSPX
+        - Tokenized Stocks: IVVON
         - Tokenized Gold: PAXG
 
         Return ONLY valid JSON matching the schema. Allocation must sum to 100.`;
@@ -381,7 +381,7 @@ class QuizController extends Controller {
             strategyName: 'Conservative Grower',
             defaultAssets: {
                 stableYields: 'USDM',
-                tokenizedStocks: 'BCSPX',
+                tokenizedStocks: 'IVVON',
                 tokenizedGold: 'PAXG'
             },
             rationale: 'A balanced approach focusing on preservation with moderate growth.',

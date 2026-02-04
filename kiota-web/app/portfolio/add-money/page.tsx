@@ -6,6 +6,7 @@ import { CaretDownIcon, CopySimple, Check, Wallet } from "@phosphor-icons/react"
 import Image from 'next/image'
 import { QRCodeSVG } from 'qrcode.react'
 import { LightingSvg } from '@/lib/svg'
+import { formatCurrency } from '@/lib/helpers'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PageHeader } from "@/components/custom/page-header"
@@ -20,6 +21,7 @@ import {
   DrawerClose,
 } from "@/components/ui/drawer"
 import { useAuth } from '@/context/auth-context'
+import { useDashboard } from '@/hooks/use-dashboard'
 import { depositApi } from '@/lib/api/client'
 
 type DepositMethod = 'mpesa' | 'card' | 'crypto'
@@ -40,7 +42,7 @@ const depositMethods: DepositMethodOption[] = [
   {
     id: 'crypto',
     title: 'Crypto Deposit',
-    subtitle: 'USDC on Base Network',
+    subtitle: 'USDC on Ethereum Mainnet',
     icon: <Wallet size={20} className="text-kiota-text-secondary" />,
   },
   {
@@ -55,12 +57,15 @@ type DepositStatus = 'idle' | 'awaiting' | 'received' | 'confirmed'
 const AddMoneyPage = () => {
   const router = useRouter()
   const { wallet } = useAuth()
+  const { data: dashboard } = useDashboard()
   const [selectedMethod, setSelectedMethod] = useState<DepositMethod>('mpesa')
   const [copied, setCopied] = useState(false)
   const [depositAddress, setDepositAddress] = useState<string | null>(null)
   const [depositSessionId, setDepositSessionId] = useState<string | null>(null)
   const [isLoadingAddress, setIsLoadingAddress] = useState(false)
   const [depositStatus, setDepositStatus] = useState<DepositStatus>('idle')
+  const [isConvertingWallet, setIsConvertingWallet] = useState(false)
+  const [walletConversionError, setWalletConversionError] = useState<string | null>(null)
 
   const selectedMethodData = depositMethods.find(m => m.id === selectedMethod)
 
@@ -119,7 +124,7 @@ const AddMoneyPage = () => {
   const fetchDepositAddress = async () => {
     setIsLoadingAddress(true)
     try {
-      const response = await depositApi.createIntent(undefined, 'USDC', 'base')
+      const response = await depositApi.createIntent(undefined, 'USDC')
       if (response.data) {
         setDepositAddress(response.data.depositAddress)
         setDepositSessionId(response.data.depositSessionId)
@@ -169,6 +174,24 @@ const AddMoneyPage = () => {
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
       console.error('Failed to copy:', err)
+    }
+  }
+
+  const walletBalance = Number(dashboard?.wallet?.usdcBalance || 0)
+
+  const handleConvertWalletBalance = async () => {
+    if (!walletBalance || isConvertingWallet) return
+
+    setIsConvertingWallet(true)
+    setWalletConversionError(null)
+
+    try {
+      await depositApi.convertWalletBalance()
+      router.push('/home')
+    } catch (err) {
+      setWalletConversionError(err instanceof Error ? err.message : 'Failed to convert wallet balance')
+    } finally {
+      setIsConvertingWallet(false)
     }
   }
 
@@ -249,6 +272,28 @@ const AddMoneyPage = () => {
         </DrawerContent>
       </Drawer>
 
+      {walletBalance ? (
+        <div className="w-full rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-kiota-text-secondary">Wallet USDC Balance</p>
+              <p className="text-lg font-semibold">{formatCurrency(walletBalance)}</p>
+            </div>
+            <Button
+              buttonColor="primary"
+              onClick={handleConvertWalletBalance}
+              disabled={isConvertingWallet}
+              className="px-4"
+            >
+              {isConvertingWallet ? 'Converting...' : 'Convert Balance'}
+            </Button>
+          </div>
+          {walletConversionError && (
+            <p className="text-xs text-red-400">{walletConversionError}</p>
+          )}
+        </div>
+      ) : null}
+
       {selectedMethod === 'crypto' && (
         <div className="flex flex-col items-center gap-4 w-full rounded-2xl border border-white/10 bg-white/5 p-4">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10">
@@ -302,7 +347,7 @@ const AddMoneyPage = () => {
 
           <div className="w-full p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
             <p className="text-xs text-yellow-500">
-              Only send USDC on the Base network to this address. Sending other tokens or using a different network may result in permanent loss of funds.
+              Only send USDC on the Ethereum Mainnet to this address. Sending other tokens or using a different network may result in permanent loss of funds.
             </p>
           </div>
 

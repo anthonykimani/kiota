@@ -80,6 +80,40 @@ export class PortfolioRepository {
         }
     }
 
+    // Increment portfolio values (for deposits)
+    async incrementValues(userId: string, values: {
+        stableYieldsValueUsd: number;
+        tokenizedStocksValueUsd: number;
+        tokenizedGoldValueUsd: number;
+        kesUsdRate: number;
+    }): Promise<Portfolio | null> {
+        try {
+            const portfolio = await this.getByUserId(userId);
+            if (!portfolio) return null;
+
+            const nextStable = Number(portfolio.stableYieldsValueUsd) + values.stableYieldsValueUsd;
+            const nextStocks = Number(portfolio.tokenizedStocksValueUsd) + values.tokenizedStocksValueUsd;
+            const nextGold = Number(portfolio.tokenizedGoldValueUsd) + values.tokenizedGoldValueUsd;
+            const totalUsd = nextStable + nextStocks + nextGold;
+
+            portfolio.stableYieldsValueUsd = nextStable;
+            portfolio.tokenizedStocksValueUsd = nextStocks;
+            portfolio.tokenizedGoldValueUsd = nextGold;
+            portfolio.totalValueUsd = totalUsd;
+            portfolio.totalValueKes = totalUsd * values.kesUsdRate;
+
+            if (totalUsd > 0) {
+                portfolio.stableYieldsPercent = (nextStable / totalUsd) * 100;
+                portfolio.tokenizedStocksPercent = (nextStocks / totalUsd) * 100;
+                portfolio.tokenizedGoldPercent = (nextGold / totalUsd) * 100;
+            }
+
+            return await this.repo.save(portfolio);
+        } catch (error) {
+            throw error;
+        }
+    }
+
     // Screen 10e: Record deposit amount
     async recordDeposit(userId: string, amountUsd: number): Promise<Portfolio | null> {
         try {

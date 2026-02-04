@@ -170,6 +170,14 @@ const ReviewDeposit = () => {
                     </Button>
                 </>
             )}
+
+            {!reviewData && (
+                <Button buttonColor="primary" className="w-full" disabled>
+                    {status === 'received'
+                        ? 'Confirming onchain...'
+                        : 'Waiting for deposit...'}
+                </Button>
+            )}
         </ScreenWrapper>
     )
 }

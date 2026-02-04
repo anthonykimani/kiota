@@ -1,9 +1,10 @@
 import { Request, Response } from 'express';
 import { PortfolioRepository } from '../repositories/portfolio.repo';
+import { WalletRepository } from '../repositories/wallet.repo';
 import { TransactionRepository } from '../repositories/transaction.repo';
+import { TransactionType } from '../enums/Transaction';
 import { MarketDataRepository } from '../repositories/market-data.repo';
 import { UserRepository } from '../repositories/user.repo';
-import { WalletRepository } from '../repositories/wallet.repo';
 import { PortfolioHoldingRepository } from '../repositories/portfolio-holding.repo';
 import Controller from './controller';
 import { AuthenticatedRequest } from '../interfaces/IAuth';
@@ -437,7 +438,7 @@ class PortfolioController extends Controller {
         portfolioRepo: PortfolioRepository
     ): Promise<any[]> {
         const now = new Date();
-        const data = [];
+        const data = [] as Array<{ date: string; value: number }>;
 
         let days = 365;
         if (period === '1D') days = 1;
@@ -446,19 +447,61 @@ class PortfolioController extends Controller {
         else if (period === '3M') days = 90;
         else if (period === '1Y') days = 365;
 
+        const startDate = new Date(now);
+        startDate.setHours(0, 0, 0, 0);
+        startDate.setDate(startDate.getDate() - days);
+
         const portfolio = await portfolioRepo.getByUserId(userId);
-        const baseValue = portfolio?.totalValueUsd || 0;
+        const currentTotal = Number(portfolio?.totalValueUsd || 0);
 
-        for (let i = days; i >= 0; i--) {
-            const date = new Date(now);
-            date.setDate(date.getDate() - i);
+        const txRepo = new TransactionRepository();
+        const transactions = await txRepo.getCompletedForHistory(userId, startDate);
 
-            const growthFactor = 1 - (i / days) * 0.1;
-            const value = baseValue * growthFactor;
+        // Aggregate daily net changes from transactions
+        const dailyDeltas = new Map<string, number>();
+        let totalDeltaInPeriod = 0;
+
+        for (const tx of transactions) {
+            const date = tx.completedAt || tx.createdAt;
+            const dayKey = date.toISOString().slice(0, 10); // YYYY-MM-DD
+            const valueUsd = Number(tx.valueUsd || 0);
+
+            let delta = 0;
+            switch (tx.type) {
+                case TransactionType.DEPOSIT:
+                case TransactionType.YIELD:
+                case TransactionType.SUBSIDY:
+                case TransactionType.REBATE:
+                    delta = valueUsd;
+                    break;
+                case TransactionType.WITHDRAWAL:
+                case TransactionType.FEE:
+                    delta = -valueUsd;
+                    break;
+                default:
+                    delta = 0;
+            }
+
+            if (delta !== 0) {
+                dailyDeltas.set(dayKey, (dailyDeltas.get(dayKey) || 0) + delta);
+                totalDeltaInPeriod += delta;
+            }
+        }
+
+        // Seed base value so the last point matches current total
+        let runningValue = Math.max(0, currentTotal - totalDeltaInPeriod);
+
+        for (let i = 0; i <= days; i++) {
+            const date = new Date(startDate);
+            date.setDate(startDate.getDate() + i);
+            const dayKey = date.toISOString().slice(0, 10);
+
+            const delta = dailyDeltas.get(dayKey) || 0;
+            runningValue = Math.max(0, runningValue + delta);
 
             data.push({
                 date: date.toISOString(),
-                value: Math.round(value * 100) / 100
+                value: Math.round(runningValue * 100) / 100,
             });
         }
 

@@ -1,11 +1,16 @@
 import { Request, Response } from 'express';
 import { UserRepository } from '../repositories/user.repo';
 import { PortfolioRepository } from '../repositories/portfolio.repo';
+import { WalletRepository } from '../repositories/wallet.repo';
 import { GoalRepository } from '../repositories/goal.repo';
 import { MarketDataRepository } from '../repositories/market-data.repo';
+import { AssetSymbol } from '../enums/MarketData';
+import { formatUnits, parseAbi } from 'viem';
 import Controller from './controller';
 import { AuthenticatedRequest } from '../interfaces/IAuth';
 import { assetRegistry } from '../services/asset-registry.service';
+import { createChainClient, getChainConfig, getCurrentNetwork } from '../configs/chain.config';
+import { TOKEN_METADATA, getTokenAddress } from '../configs/tokens.config';
 
 /**
  * Dashboard Controller
@@ -23,6 +28,7 @@ class DashboardController extends Controller {
         try {
             const userRepo: UserRepository = new UserRepository();
             const portfolioRepo: PortfolioRepository = new PortfolioRepository();
+            const walletRepo: WalletRepository = new WalletRepository();
             const goalRepo: GoalRepository = new GoalRepository();
             const marketDataRepo: MarketDataRepository = new MarketDataRepository();
             
@@ -53,6 +59,7 @@ class DashboardController extends Controller {
 
             // Get portfolio
             const portfolio = await portfolioRepo.getByUserId(userId);
+            const wallet = await walletRepo.getByUserId(userId);
 
             if (!portfolio) {
                 return res.send(
@@ -70,45 +77,177 @@ class DashboardController extends Controller {
             // Get KES/USD rate
             const kesUsdRate = await marketDataRepo.getKesUsdRate();
 
-            const totalKes = portfolio.totalValueUsd * kesUsdRate;
             const monthlyChange = portfolio.thisMonthYield || 0;
-            const monthlyChangePercent = portfolio.totalValueUsd > 0 
-                ? (monthlyChange / portfolio.totalValueUsd) * 100 
-                : 0;
 
             const stablePrimary = await assetRegistry.getPrimaryAssetByClassKey('stable_yields');
             const stocksPrimary = await assetRegistry.getPrimaryAssetByClassKey('tokenized_stocks');
             const goldPrimary = await assetRegistry.getPrimaryAssetByClassKey('tokenized_gold');
+
+            const chainNetwork = getCurrentNetwork();
+            const chainConfig = getChainConfig();
+            const publicClient = createChainClient();
+            const erc20Abi = parseAbi([
+                'function balanceOf(address owner) view returns (uint256)'
+            ]);
+
+            const getOnchainBalance = async (symbol: keyof typeof TOKEN_METADATA): Promise<number | null> => {
+                try {
+                    const address = getTokenAddress(symbol, chainNetwork);
+                    const rawBalance = await publicClient.readContract({
+                        address: address as `0x${string}`,
+                        abi: erc20Abi,
+                        functionName: 'balanceOf',
+                        args: [wallet?.address as `0x${string}`],
+                    });
+                    const decimals = TOKEN_METADATA[symbol].decimals;
+                    return Number(formatUnits(rawBalance as bigint, decimals));
+                } catch {
+                    return null;
+                }
+            };
+
+            const [onchainUsdc, onchainUsdm, onchainIvvon, onchainPaxg] = wallet?.address
+                ? await Promise.all([
+                    getOnchainBalance('USDC'),
+                    getOnchainBalance('USDM'),
+                    getOnchainBalance('IVVON'),
+                    getOnchainBalance('PAXG'),
+                ])
+                : [null, null, null, null];
+
+            let stableMarket = null;
+            let stocksMarket = null;
+            let goldMarket = null;
+
+            const normalizeSymbol = (symbol?: string | null): AssetSymbol | null => {
+                if (!symbol) return null;
+                return symbol.toLowerCase() as AssetSymbol;
+            };
+
+            try {
+                const stableSymbol = normalizeSymbol(stablePrimary?.symbol);
+                const stocksSymbol = normalizeSymbol(stocksPrimary?.symbol);
+                const goldSymbol = normalizeSymbol(goldPrimary?.symbol);
+
+                stableMarket = stableSymbol
+                    ? await marketDataRepo.getAssetData(stableSymbol)
+                    : null;
+                stocksMarket = stocksSymbol
+                    ? await marketDataRepo.getAssetData(stocksSymbol)
+                    : null;
+                goldMarket = goldSymbol
+                    ? await marketDataRepo.getAssetData(goldSymbol)
+                    : null;
+            } catch (error) {
+                // Gracefully degrade if market data isn't available yet
+                stableMarket = null;
+                stocksMarket = null;
+                goldMarket = null;
+            }
+
+            const getMonthlyEarnings = (valueUsd: number, apy?: number, avgReturn?: number) => {
+                const rate = apy ?? avgReturn ?? 0;
+                return valueUsd * (Number(rate) / 100) / 12;
+            };
+
+            const stableBalance = onchainUsdm ?? (wallet?.stableYieldBalance ?? 0);
+            const stocksBalance = onchainIvvon ?? (wallet?.tokenizedStocksBalance ?? 0);
+            const goldBalance = onchainPaxg ?? (wallet?.tokenizedGoldBalance ?? 0);
+            const onchainHoldingsPresent = [stableBalance, stocksBalance, goldBalance].some(amount => amount > 0);
+
+            const stablePrice = stableMarket?.price != null ? Number(stableMarket.price) : 1;
+            const stocksPrice = stocksMarket?.price != null ? Number(stocksMarket.price) : 0;
+            const goldPrice = goldMarket?.price != null ? Number(goldMarket.price) : 0;
+
+            const stableValueUsd = stableBalance * stablePrice;
+            const stocksValueUsd = stocksBalance * stocksPrice;
+            const goldValueUsd = goldBalance * goldPrice;
+
+            const onchainTotalValueUsd = stableValueUsd + stocksValueUsd + goldValueUsd;
+            const portfolioTotalValueUsd = onchainHoldingsPresent ? onchainTotalValueUsd : 0;
+            const monthlyChangePercent = portfolioTotalValueUsd > 0
+                ? (monthlyChange / portfolioTotalValueUsd) * 100
+                : 0;
 
             const assets = [
                 {
                     classKey: 'stable_yields',
                     name: 'Stable Yields',
                     primaryAssetSymbol: stablePrimary?.symbol || null,
-                    valueUsd: portfolio.stableYieldsValueUsd,
-                    percentage: portfolio.stableYieldsPercent,
-                    monthlyEarnings: portfolio.stableYieldsValueUsd * 0.05 / 12,
-                    apy: 5.0
+                    valueUsd: onchainHoldingsPresent ? stableValueUsd : 0,
+                    percentage: onchainHoldingsPresent && portfolioTotalValueUsd > 0
+                        ? (stableValueUsd / portfolioTotalValueUsd) * 100
+                        : 0,
+                    monthlyEarnings: getMonthlyEarnings(
+                        onchainHoldingsPresent ? stableValueUsd : 0,
+                        stableMarket?.currentApy != null ? Number(stableMarket.currentApy) : undefined
+                    ),
+                    apy: stableMarket?.currentApy != null ? Number(stableMarket.currentApy) : undefined,
+                    price: stableMarket?.price != null ? Number(stableMarket.price) : undefined,
+                    change: stableMarket?.change24h != null ? Number(stableMarket.change24h) : undefined,
+                    changePercent: stableMarket?.changePercent24h != null ? Number(stableMarket.changePercent24h) : undefined,
                 },
                 {
                     classKey: 'tokenized_stocks',
                     name: 'Tokenized Stocks',
                     primaryAssetSymbol: stocksPrimary?.symbol || null,
-                    valueUsd: portfolio.tokenizedStocksValueUsd,
-                    percentage: portfolio.tokenizedStocksPercent,
-                    monthlyEarnings: portfolio.tokenizedStocksValueUsd * 0.10 / 12,
-                    avgReturn: 10.0,
-                    requiresTier2: true
+                    valueUsd: onchainHoldingsPresent ? stocksValueUsd : 0,
+                    percentage: onchainHoldingsPresent && portfolioTotalValueUsd > 0
+                        ? (stocksValueUsd / portfolioTotalValueUsd) * 100
+                        : 0,
+                    monthlyEarnings: getMonthlyEarnings(
+                        onchainHoldingsPresent ? stocksValueUsd : 0,
+                        undefined,
+                        stocksMarket?.currentApy != null ? Number(stocksMarket.currentApy) : undefined
+                    ),
+                    avgReturn: stocksMarket?.currentApy != null ? Number(stocksMarket.currentApy) : undefined,
+                    requiresTier2: true,
+                    price: stocksMarket?.price != null ? Number(stocksMarket.price) : undefined,
+                    change: stocksMarket?.change24h != null ? Number(stocksMarket.change24h) : undefined,
+                    changePercent: stocksMarket?.changePercent24h != null ? Number(stocksMarket.changePercent24h) : undefined,
                 },
                 {
                     classKey: 'tokenized_gold',
                     name: 'Tokenized Gold',
                     primaryAssetSymbol: goldPrimary?.symbol || null,
-                    valueUsd: portfolio.tokenizedGoldValueUsd,
-                    percentage: portfolio.tokenizedGoldPercent,
-                    monthlyEarnings: portfolio.tokenizedGoldValueUsd * 0.05 / 12
+                    valueUsd: onchainHoldingsPresent ? goldValueUsd : 0,
+                    percentage: onchainHoldingsPresent && portfolioTotalValueUsd > 0
+                        ? (goldValueUsd / portfolioTotalValueUsd) * 100
+                        : 0,
+                    monthlyEarnings: getMonthlyEarnings(
+                        onchainHoldingsPresent ? goldValueUsd : 0,
+                        goldMarket?.currentApy != null ? Number(goldMarket.currentApy) : undefined
+                    ),
+                    apy: goldMarket?.currentApy != null ? Number(goldMarket.currentApy) : undefined,
+                    price: goldMarket?.price != null ? Number(goldMarket.price) : undefined,
+                    change: goldMarket?.change24h != null ? Number(goldMarket.change24h) : undefined,
+                    changePercent: goldMarket?.changePercent24h != null ? Number(goldMarket.changePercent24h) : undefined,
                 }
             ].filter(asset => asset.valueUsd > 0);
+
+            const marketPerformance = [
+                stablePrimary?.symbol ? {
+                    symbol: stablePrimary.symbol,
+                    name: stablePrimary.name,
+                    price: stableMarket?.price != null ? Number(stableMarket.price) : 1,
+                    change: stableMarket?.change24h != null ? Number(stableMarket.change24h) : 0,
+                    changePercent: stableMarket?.changePercent24h != null ? Number(stableMarket.changePercent24h) : 0,
+                } : null,
+                stocksPrimary?.symbol ? {
+                    symbol: stocksPrimary.symbol,
+                    name: stocksPrimary.name,
+                    price: stocksMarket?.price != null ? Number(stocksMarket.price) : 0,
+                    change: stocksMarket?.change24h != null ? Number(stocksMarket.change24h) : 0,
+                    changePercent: stocksMarket?.changePercent24h != null ? Number(stocksMarket.changePercent24h) : 0,
+                } : null,
+                goldPrimary?.symbol ? {
+                    symbol: goldPrimary.symbol,
+                    name: goldPrimary.name,
+                    price: goldMarket?.price != null ? Number(goldMarket.price) : 0,
+                    change: goldMarket?.change24h != null ? Number(goldMarket.change24h) : 0,
+                    changePercent: goldMarket?.changePercent24h != null ? Number(goldMarket.changePercent24h) : 0,
+                } : null,
+            ].filter(Boolean);
 
             const formattedGoals = goals.map(goal => ({
                 id: goal.id,
@@ -130,14 +269,30 @@ class DashboardController extends Controller {
                     totalPoints: user.totalPoints,
                     level: user.level
                 },
+                chain: {
+                    id: chainNetwork,
+                    name: chainConfig.name,
+                    isTestnet: chainConfig.isTestnet
+                },
+                onchain: {
+                    hasHoldings: onchainHoldingsPresent,
+                    totalValueUsd: onchainTotalValueUsd
+                },
+                wallet: {
+                    usdcBalance: onchainUsdc ?? (wallet?.usdcBalance ?? 0),
+                    stableYieldBalance: stableBalance,
+                    tokenizedStocksBalance: stocksBalance,
+                    tokenizedGoldBalance: goldBalance,
+                },
                 portfolio: {
-                    totalValueUsd: portfolio.totalValueUsd,
-                    totalValueKes: totalKes,
+                    totalValueUsd: portfolioTotalValueUsd,
+                    totalValueKes: portfolioTotalValueUsd * kesUsdRate,
                     monthlyChange: monthlyChange,
                     monthlyChangePercent: monthlyChangePercent,
                     monthlyTrend: monthlyChangePercent > 0 ? 'up' : monthlyChangePercent < 0 ? 'down' : 'stable'
                 },
                 assets: assets,
+                marketPerformance,
                 totalMonthlyEarnings: assets.reduce((sum, a) => sum + (a.monthlyEarnings || 0), 0),
                 goals: formattedGoals,
                 quickActions: {

@@ -41,8 +41,9 @@ export class AssetRegistryService {
       return asset.address;
     }
 
-    if ((asset.symbol as keyof typeof TOKEN_METADATA) in TOKEN_METADATA) {
-      return getTokenAddress(asset.symbol as keyof typeof TOKEN_METADATA, network);
+    const normalizedSymbol = asset.symbol.toUpperCase() as keyof typeof TOKEN_METADATA;
+    if (normalizedSymbol in TOKEN_METADATA) {
+      return getTokenAddress(normalizedSymbol, network);
     }
 
     throw new Error(`Missing address for asset ${asset.symbol} on ${network}`);
@@ -53,8 +54,9 @@ export class AssetRegistryService {
       return asset.decimals;
     }
 
-    if ((asset.symbol as keyof typeof TOKEN_METADATA) in TOKEN_METADATA) {
-      return TOKEN_METADATA[asset.symbol as keyof typeof TOKEN_METADATA].decimals;
+    const normalizedSymbol = asset.symbol.toUpperCase() as keyof typeof TOKEN_METADATA;
+    if (normalizedSymbol in TOKEN_METADATA) {
+      return TOKEN_METADATA[normalizedSymbol].decimals;
     }
 
     return 18;

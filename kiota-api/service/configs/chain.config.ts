@@ -52,14 +52,16 @@ export const CHAIN_CONFIG: Record<SupportedNetwork, {
 
 /**
  * Get the current network from environment
- * Defaults to 'base-sepolia' for development
+ * Defaults to 'ethereum' for production (1inch only supports mainnet)
+ * 
+ * IMPORTANT: Testnets are NOT supported by 1inch for swaps!
  */
 export function getCurrentNetwork(): SupportedNetwork {
-  const network = process.env.CHAIN_NETWORK || 'base-sepolia';
+  const network = process.env.CHAIN_NETWORK || 'ethereum';
   
   if (!isValidNetwork(network)) {
-    console.warn(`Invalid CHAIN_NETWORK "${network}", defaulting to base-sepolia`);
-    return 'base-sepolia';
+    console.warn(`Invalid CHAIN_NETWORK "${network}", defaulting to ethereum`);
+    return 'ethereum';
   }
   
   return network;

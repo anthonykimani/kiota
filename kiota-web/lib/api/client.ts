@@ -211,6 +211,12 @@ export const dashboardApi = {
         totalPoints: number
         level: number
       }
+      wallet?: {
+        usdcBalance: number
+        stableYieldBalance: number
+        tokenizedStocksBalance: number
+        tokenizedGoldBalance: number
+      }
       portfolio: {
         totalValueUsd: number
         totalValueKes: number
@@ -228,6 +234,16 @@ export const dashboardApi = {
         apy?: number
         avgReturn?: number
         requiresTier2?: boolean
+        price?: number
+        change?: number
+        changePercent?: number
+      }>
+      marketPerformance?: Array<{
+        symbol: string
+        name: string
+        price: number
+        change: number
+        changePercent: number
       }>
       totalMonthlyEarnings: number
       goals: Array<{
@@ -404,6 +420,21 @@ export const depositApi = {
         tokenizedGold: number
       }
     }>('/deposit/convert', { depositSessionId }),
+
+  convertWalletBalance: (amountUsd?: number) =>
+    api.post<{
+      conversionGroupId: string
+      convertedAmount: number
+      status: string
+      swaps: Array<{ transactionId: string; toAsset: string; amount: number }>
+      swapCount: number
+      estimatedCompletionTime: string
+      allocation: {
+        stableYields: number
+        tokenizedStocks: number
+        tokenizedGold: number
+      }
+    }>('/deposit/convert-wallet', { amountUsd }),
 
   getReview: (depositSessionId: string) =>
     api.post<{

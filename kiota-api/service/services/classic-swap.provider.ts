@@ -8,18 +8,24 @@
  * - Token allowance checking and approval
  * - Transaction signing via Privy SDK (per-user wallets)
  * - RPC-based transaction confirmation
- * - Works on Ethereum Sepolia testnet and Ethereum mainnet
+ *
+ * Supported Networks:
+ * - Ethereum Mainnet (chain ID 1) - PRIMARY, full token support
+ * - Base Mainnet (chain ID 8453) - Limited tokens
+ * 
+ * IMPORTANT: 1inch does NOT support testnets for swaps!
  *
  * Trade-offs:
- * ✅ Testnet support (Ethereum Sepolia)
  * ✅ Instant execution (no auction delay)
  * ✅ Per-user Privy wallets (non-custodial)
+ * ✅ Wide token support on Ethereum mainnet
  * ❌ User pays gas fees (not gasless)
  * ❌ No MEV protection
+ * ❌ Testnets not supported
  */
 
 import { createPublicClient, http, parseAbi, encodeFunctionData } from 'viem';
-import { mainnet, sepolia, base } from 'viem/chains';
+import { mainnet, base } from 'viem/chains';
 import { ISwapProvider, QuoteParams, QuoteResult, SwapParams, SwapResult, SwapStatus } from '../interfaces/ISwapProvider';
 import { createLogger } from '../utils/logger.util';
 import { privyService } from '../utils/provider/privy';
@@ -32,16 +38,15 @@ const ONEINCH_NETWORK = process.env.ONEINCH_NETWORK || 'ethereum';
 const NODE_URL = process.env.NODE_URL || '';
 
 // Network mapping to 1inch chain IDs
+// IMPORTANT: 1inch does NOT support testnets - mainnet only!
 const NETWORK_CHAIN_IDS: Record<string, number> = {
   'ethereum': 1,
-  'ethereum-sepolia': 11155111,
   'base': 8453,
 };
 
 // Network mapping to viem chains
 const VIEM_CHAINS: Record<string, any> = {
   'ethereum': mainnet,
-  'ethereum-sepolia': sepolia,
   'base': base,
 };
 
@@ -65,14 +70,14 @@ export class ClassicSwapProvider implements ISwapProvider {
     this.chainId = NETWORK_CHAIN_IDS[this.network];
 
     if (!this.chainId) {
-      throw new Error(`Unknown network: ${this.network}. Supported: ethereum, ethereum-sepolia`);
+      throw new Error(`Unknown network: ${this.network}. Supported: ethereum, base`);
     }
 
     this.baseUrl = `https://api.1inch.dev/swap/v6.1/${this.chainId}`;
 
     // Create public client for reading blockchain state (allowances, receipts)
     const chain = VIEM_CHAINS[this.network];
-    const rpcUrl = NODE_URL || (this.network === 'ethereum' ? 'https://eth.llamarpc.com' : 'https://ethereum-sepolia-rpc.publicnode.com');
+    const rpcUrl = NODE_URL || (this.network === 'ethereum' ? 'https://eth.llamarpc.com' : 'https://mainnet.base.org');
 
     this.publicClient = createPublicClient({
       chain,
@@ -150,7 +155,7 @@ export class ClassicSwapProvider implements ISwapProvider {
   }
 
   /**
-   * Execute swap using Privy wallet
+   * Check if running in mock mode (testnet without 1inch support)
    */
   async executeSwap(params: SwapParams): Promise<SwapResult> {
     const { fromToken, toToken, amount, userAddress, privyWalletId, slippage = 1 } = params;
