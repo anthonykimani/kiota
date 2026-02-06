@@ -40,6 +40,10 @@ export const colors = {
       color: "hsl(142, 76%, 36%)",
       text: "#34C759",
     },
+    yield: {
+      color: "hsl(172, 66%, 42%)",
+      text: "#14B8A6",
+    },
     growth: {
       color: "hsl(221, 83%, 53%)",
       text: "#2E90FA",
@@ -63,6 +67,11 @@ export const assetClassConfig = {
     label: "Preservation",
     color: colors.assetClass.preservation.color,
     textColor: colors.assetClass.preservation.text,
+  },
+  yield: {
+    label: "DeFi Yield",
+    color: colors.assetClass.yield.color,
+    textColor: colors.assetClass.yield.text,
   },
   growth: {
     label: "Growth",

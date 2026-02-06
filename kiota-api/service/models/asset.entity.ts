@@ -17,7 +17,7 @@ export class Asset {
 
   @Column({ type: 'varchar', length: 20, unique: true })
   @Index()
-  symbol: string; // USDM, BCSPX, PAXG, TSLAon, etc.
+  symbol: string; // USDM, IVVON, PAXG, TSLAon, etc.
 
   @Column({ type: 'varchar', length: 120 })
   name: string;

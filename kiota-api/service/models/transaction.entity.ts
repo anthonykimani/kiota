@@ -143,9 +143,9 @@ export class Transaction {
   @Column({ type: 'jsonb', nullable: true })
   allocation: {
     stableYields?: number;
-    tokenizedStocks?: number;
+    defiYield?: number;
     tokenizedGold?: number;
-    blueChipCrypto?: number;
+    bluechipCrypto?: number;
   };
 
   // Timing

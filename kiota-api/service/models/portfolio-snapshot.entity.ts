@@ -40,13 +40,10 @@ export class PortfolioSnapshot {
   stableYieldsValueUsd: number;
 
   @Column({ type: 'decimal', precision: 18, scale: 2 })
-  tokenizedStocksValueUsd: number;
+  bluechipCryptoValueUsd: number;
 
   @Column({ type: 'decimal', precision: 18, scale: 2 })
   tokenizedGoldValueUsd: number;
-
-  @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
-  blueChipCryptoValueUsd: number;
 
   // Market prices at snapshot
   @Column({ type: 'decimal', precision: 10, scale: 2 })

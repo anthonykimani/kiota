@@ -35,7 +35,7 @@ describe('TransactionRepository', () => {
       logIndex: 0,
       allocation: {
         stableYields: 80,
-        tokenizedStocks: 15,
+        bluechipCrypto: 15,
         tokenizedGold: 5
       }
     };
@@ -69,7 +69,7 @@ describe('TransactionRepository', () => {
 
       expect(transaction.allocation).toEqual({
         stableYields: 80,
-        tokenizedStocks: 15,
+        bluechipCrypto: 15,
         tokenizedGold: 5
       });
     });
@@ -172,7 +172,7 @@ describe('TransactionRepository', () => {
         amountUsd: 100,
         txHash: '0xHash1',
         logIndex: 0,
-        allocation: { stableYields: 80, tokenizedStocks: 15, tokenizedGold: 5 }
+        allocation: { stableYields: 80, bluechipCrypto: 15, tokenizedGold: 5 }
       });
 
       await repository.createOnchainDeposit({
@@ -184,7 +184,7 @@ describe('TransactionRepository', () => {
         amountUsd: 50,
         txHash: '0xHash2',
         logIndex: 0,
-        allocation: { stableYields: 80, tokenizedStocks: 15, tokenizedGold: 5 }
+        allocation: { stableYields: 80, bluechipCrypto: 15, tokenizedGold: 5 }
       });
 
       await repository.createOnchainDeposit({
@@ -196,7 +196,7 @@ describe('TransactionRepository', () => {
         amountUsd: 25,
         txHash: '0xHash3',
         logIndex: 0,
-        allocation: { stableYields: 80, tokenizedStocks: 15, tokenizedGold: 5 }
+        allocation: { stableYields: 80, bluechipCrypto: 15, tokenizedGold: 5 }
       });
 
       const allocated = await repository.getAllocatedUsdcUsd(userId);
@@ -214,7 +214,7 @@ describe('TransactionRepository', () => {
         amountUsd: 100,
         txHash: '0xHash1',
         logIndex: 0,
-        allocation: { stableYields: 80, tokenizedStocks: 15, tokenizedGold: 5 }
+        allocation: { stableYields: 80, bluechipCrypto: 15, tokenizedGold: 5 }
       });
 
       // Create on different chain
@@ -227,7 +227,7 @@ describe('TransactionRepository', () => {
         amountUsd: 50,
         txHash: '0xHash2',
         logIndex: 0,
-        allocation: { stableYields: 80, tokenizedStocks: 15, tokenizedGold: 5 }
+        allocation: { stableYields: 80, bluechipCrypto: 15, tokenizedGold: 5 }
       });
 
       const allocated = await repository.getAllocatedUsdcUsd(userId);
@@ -247,7 +247,7 @@ describe('TransactionRepository', () => {
         amountUsd: 100,
         txHash: '0xHash1',
         logIndex: 0,
-        allocation: { stableYields: 80, tokenizedStocks: 15, tokenizedGold: 5 }
+        allocation: { stableYields: 80, bluechipCrypto: 15, tokenizedGold: 5 }
       });
 
       // Create pending M-Pesa deposit (not onchain yet)
@@ -257,7 +257,7 @@ describe('TransactionRepository', () => {
         amountUsd: 10,
         exchangeRate: 100,
         mpesaPhoneNumber: '+254712345678',
-        allocation: { stableYields: 80, tokenizedStocks: 15, tokenizedGold: 5 }
+        allocation: { stableYields: 80, bluechipCrypto: 15, tokenizedGold: 5 }
       });
 
       const allocated = await repository.getAllocatedUsdcUsd(userId);
@@ -277,7 +277,7 @@ describe('TransactionRepository', () => {
         amountUsd: 100,
         txHash: '0xHash1',
         logIndex: 0,
-        allocation: { stableYields: 80, tokenizedStocks: 15, tokenizedGold: 5 }
+        allocation: { stableYields: 80, bluechipCrypto: 15, tokenizedGold: 5 }
       });
 
       // User 2 deposits
@@ -290,7 +290,7 @@ describe('TransactionRepository', () => {
         amountUsd: 50,
         txHash: '0xHash2',
         logIndex: 0,
-        allocation: { stableYields: 80, tokenizedStocks: 15, tokenizedGold: 5 }
+        allocation: { stableYields: 80, bluechipCrypto: 15, tokenizedGold: 5 }
       });
 
       const allocated1 = await repository.getAllocatedUsdcUsd(randomUUID());
@@ -311,7 +311,7 @@ describe('TransactionRepository', () => {
         mpesaPhoneNumber: '+254712345678',
         allocation: {
           stableYields: 80,
-          tokenizedStocks: 15,
+          bluechipCrypto: 15,
           tokenizedGold: 5
         },
         feeKes: 20,
@@ -335,7 +335,7 @@ describe('TransactionRepository', () => {
         amountUsd: 10,
         exchangeRate: 100,
         mpesaPhoneNumber: '+254712345678',
-        allocation: { stableYields: 80, tokenizedStocks: 15, tokenizedGold: 5 }
+        allocation: { stableYields: 80, bluechipCrypto: 15, tokenizedGold: 5 }
       });
 
       const updated = await repository.updateMpesaCheckout(
@@ -354,7 +354,7 @@ describe('TransactionRepository', () => {
         amountUsd: 10,
         exchangeRate: 100,
         mpesaPhoneNumber: '+254712345678',
-        allocation: { stableYields: 80, tokenizedStocks: 15, tokenizedGold: 5 }
+        allocation: { stableYields: 80, bluechipCrypto: 15, tokenizedGold: 5 }
       });
 
       const updated = await repository.markAsProcessing(
@@ -374,7 +374,7 @@ describe('TransactionRepository', () => {
         amountUsd: 10,
         exchangeRate: 100,
         mpesaPhoneNumber: '+254712345678',
-        allocation: { stableYields: 80, tokenizedStocks: 15, tokenizedGold: 5 }
+        allocation: { stableYields: 80, bluechipCrypto: 15, tokenizedGold: 5 }
       });
 
       const updated = await repository.markAsCompleted(transaction.id, {
@@ -396,7 +396,7 @@ describe('TransactionRepository', () => {
         amountUsd: 10,
         exchangeRate: 100,
         mpesaPhoneNumber: '+254712345678',
-        allocation: { stableYields: 80, tokenizedStocks: 15, tokenizedGold: 5 }
+        allocation: { stableYields: 80, bluechipCrypto: 15, tokenizedGold: 5 }
       });
 
       const updated = await repository.markAsFailed(
@@ -417,7 +417,7 @@ describe('TransactionRepository', () => {
         amountUsd: 10,
         exchangeRate: 100,
         mpesaPhoneNumber: '+254712345678',
-        allocation: { stableYields: 80, tokenizedStocks: 15, tokenizedGold: 5 }
+        allocation: { stableYields: 80, bluechipCrypto: 15, tokenizedGold: 5 }
       });
 
       await repository.updateMpesaCheckout(transaction.id, 'ws_CO_FIND_ME');
@@ -441,7 +441,7 @@ describe('TransactionRepository', () => {
         amountUsd: 100,
         txHash: '0xHash',
         logIndex: 0,
-        allocation: { stableYields: 80, tokenizedStocks: 15, tokenizedGold: 5 }
+        allocation: { stableYields: 80, bluechipCrypto: 15, tokenizedGold: 5 }
       });
 
       const retrieved = await repository.getById(created.id);

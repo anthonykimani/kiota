@@ -29,18 +29,18 @@ export class Portfolio {
   @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
   totalValueKes: number;
 
-  // Asset breakdown in USD
+  // Asset breakdown in USD (4 asset classes)
   @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
   stableYieldsValueUsd: number;
-
-  @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
-  tokenizedStocksValueUsd: number;
 
   @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
   tokenizedGoldValueUsd: number;
 
   @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
-  blueChipCryptoValueUsd: number;
+  defiYieldValueUsd: number;
+
+  @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
+  bluechipCryptoValueUsd: number;
 
   @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
   gasBalanceValueUsd: number;
@@ -50,13 +50,13 @@ export class Portfolio {
   stableYieldsPercent: number;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
-  tokenizedStocksPercent: number;
-
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
   tokenizedGoldPercent: number;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
-  blueChipCryptoPercent: number;
+  defiYieldPercent: number;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
+  bluechipCryptoPercent: number;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
   gasBalancePercent: number;

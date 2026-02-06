@@ -2,7 +2,7 @@ export enum AssetSymbol {
   KES_USD = 'kes_usd',
   USDM = 'usdm',
   USDC = 'usdc',
-  BCSPX = 'bcspx',
+  IVVON = 'ivvon',
   PAXG = 'paxg',
   BTC = 'btc',
   ETH = 'eth',

@@ -98,11 +98,12 @@ export async function processDepositCompletion(
 
     // Step 3: Update portfolio values
     await contextLogger.withTiming('Update portfolio values', async () => {
-      await portfolioRepo.updateValues(transaction.userId, {
+      await portfolioRepo.incrementValues(transaction.userId, {
         stableYieldsValueUsd: amountUsd * ((allocation?.stableYields || 0) / 100),
-        tokenizedStocksValueUsd:
-          amountUsd * ((allocation?.tokenizedStocks || 0) / 100),
+        defiYieldValueUsd: amountUsd * ((allocation?.defiYield || 0) / 100),
         tokenizedGoldValueUsd: amountUsd * ((allocation?.tokenizedGold || 0) / 100),
+        bluechipCryptoValueUsd:
+          amountUsd * ((allocation?.bluechipCrypto || 0) / 100),
         kesUsdRate: transaction.exchangeRate,
       });
     });
@@ -122,11 +123,13 @@ export async function processDepositCompletion(
 
     // Step 6: Update wallet balances
     await contextLogger.withTiming('Update wallet balances', async () => {
-      await walletRepo.updateBalances(transaction.userId, {
+      await walletRepo.incrementBalances(transaction.userId, {
+        usdcBalance: -amountUsd,
         stableYieldBalance: amountUsd * ((allocation?.stableYields || 0) / 100),
-        tokenizedStocksBalance:
-          amountUsd * ((allocation?.tokenizedStocks || 0) / 100),
+        defiYieldBalance: amountUsd * ((allocation?.defiYield || 0) / 100),
         tokenizedGoldBalance: amountUsd * ((allocation?.tokenizedGold || 0) / 100),
+        bluechipCryptoBalance:
+          amountUsd * ((allocation?.bluechipCrypto || 0) / 100),
       });
     });
     job.log('Wallet balances updated');

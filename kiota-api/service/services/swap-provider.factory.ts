@@ -1,9 +1,11 @@
 /**
  * Swap Provider Factory
  *
- * Creates the appropriate swap provider based on network configuration:
- * - Fusion enabled + Ethereum mainnet → FusionSwapProvider
- * - Otherwise → ClassicSwapProvider
+ * Creates the appropriate swap provider based on configuration:
+ * - SWAP_PROVIDER=zerox → ZeroXSwapProvider (0x Gasless, recommended)
+ * - SWAP_PROVIDER=fusion → FusionSwapProvider (1inch Fusion, $30 min)
+ * - SWAP_PROVIDER=classic → ClassicSwapProvider (1inch Classic, needs gas)
+ * - Default → ZeroXSwapProvider
  *
  * This allows seamless switching between implementations via environment variables
  * without changing any application code.
@@ -12,36 +14,58 @@
 import { ISwapProvider } from '../interfaces/ISwapProvider';
 import { ClassicSwapProvider } from './classic-swap.provider';
 import { FusionSwapProvider } from './fusion-swap.provider';
+import { ZeroXSwapProvider } from './zerox-swap.provider';
 import { createLogger } from '../utils/logger.util';
 
 const logger = createLogger('swap-provider-factory');
 
+type SwapProviderType = 'zerox' | 'fusion' | 'classic';
+
 /**
- * Create swap provider based on network configuration
+ * Create swap provider based on configuration
  *
  * Selection logic:
- * - Fusion is mainnet-only and must be explicitly enabled
+ * - SWAP_PROVIDER env var determines provider
+ * - Default: 0x Gasless (lower minimums, gasless)
  *
  * @returns ISwapProvider implementation
  */
 export function createSwapProvider(): ISwapProvider {
-  const network = process.env.ONEINCH_NETWORK || 'ethereum';
-  const fusionEnabled = process.env.ONEINCH_FUSION_ENABLED === 'true';
+  const network = process.env.CHAIN_NETWORK || 'ethereum';
+  const providerType = (process.env.SWAP_PROVIDER || 'zerox') as SwapProviderType;
 
   let provider: ISwapProvider;
 
-  if (fusionEnabled && network === 'ethereum') {
-    logger.info('Creating Fusion Swap provider', {
-      network,
-      signerMode: process.env.ONEINCH_FUSION_SIGNER || 'private_key',
-    });
-    provider = new FusionSwapProvider();
-  } else {
-    logger.info('Creating Classic Swap provider', {
-      network,
-      reason: fusionEnabled ? 'Fusion only supported on Ethereum mainnet' : 'Fusion disabled'
-    });
-    provider = new ClassicSwapProvider();
+  switch (providerType) {
+    case 'zerox':
+      logger.info('Creating 0x Gasless provider', { network });
+      provider = new ZeroXSwapProvider(network);
+      break;
+
+    case 'fusion':
+      if (network !== 'ethereum') {
+        logger.warn('Fusion only supports Ethereum mainnet, falling back to 0x', { network });
+        provider = new ZeroXSwapProvider(network);
+      } else {
+        logger.info('Creating Fusion Swap provider', {
+          network,
+          signerMode: process.env.ONEINCH_FUSION_SIGNER || 'privy',
+        });
+        provider = new FusionSwapProvider();
+      }
+      break;
+
+    case 'classic':
+      logger.info('Creating Classic Swap provider', { network });
+      provider = new ClassicSwapProvider();
+      break;
+
+    default:
+      logger.info('Unknown provider type, defaulting to 0x Gasless', {
+        providerType,
+        network,
+      });
+      provider = new ZeroXSwapProvider(network);
   }
 
   // Verify provider is configured

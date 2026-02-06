@@ -9,7 +9,7 @@ export class PortfolioHolding {
   portfolioId: string;
 
   @Column({ type: 'varchar', length: 20 })
-  assetSymbol: string; // 'USDM', 'BCSPX', 'PAXG', etc.
+  assetSymbol: string; // 'USDM', 'IVVON', 'PAXG', etc.
 
   @Column({ type: 'varchar', length: 20 })
   assetCategory: string; // 'stable_yields', 'tokenized_stocks', 'tokenized_gold', 'blue_chip_crypto', 'cash'

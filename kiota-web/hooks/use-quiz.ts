@@ -8,6 +8,7 @@ interface UseQuizResult {
   submitQuiz: (answers: QuizAnswers) => Promise<{ sessionId: string; strategy: Strategy } | null>
   acceptStrategy: (sessionId: string, accepted: boolean, customAllocation?: {
     stableYields: number
+    defiYield: number
     tokenizedStocks: number
     tokenizedGold: number
   }) => Promise<{ accepted: boolean; nextStep: string } | null>
@@ -48,6 +49,7 @@ export function useQuiz(): UseQuizResult {
     accepted: boolean,
     customAllocation?: {
       stableYields: number
+      defiYield: number
       tokenizedStocks: number
       tokenizedGold: number
     }

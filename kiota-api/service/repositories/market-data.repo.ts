@@ -47,10 +47,11 @@ export class MarketDataRepository {
     }
 
     // Screen 11, 12: Get asset price
-    async getAssetPrice(symbol: AssetSymbol): Promise<number | null> {
+    async getAssetPrice(symbol: AssetSymbol | string): Promise<number | null> {
         try {
+            const normalizedSymbol = symbol.toString().toLowerCase() as AssetSymbol;
             const data = await this.marketRepo.findOne({
-                where: { symbol },
+                where: { symbol: normalizedSymbol },
                 order: { timestamp: 'DESC' }
             });
 
@@ -61,10 +62,11 @@ export class MarketDataRepository {
     }
 
     // Screen 12: Get asset details
-    async getAssetData(symbol: AssetSymbol): Promise<MarketData | null> {
+    async getAssetData(symbol: AssetSymbol | string): Promise<MarketData | null> {
         try {
+            const normalizedSymbol = symbol.toString().toLowerCase() as AssetSymbol;
             return await this.marketRepo.findOne({
-                where: { symbol },
+                where: { symbol: normalizedSymbol },
                 order: { timestamp: 'DESC' }
             });
         } catch (error) {

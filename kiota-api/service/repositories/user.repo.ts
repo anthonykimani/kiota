@@ -94,26 +94,50 @@ export class UserRepository {
         }
     }
 
-    // Screen 6 & 7: Save AI strategy recommendation
+    // Save strategy from quiz scoring
     async saveStrategy(userId: string, strategy: {
         targetStableYieldsPercent: number;
-        targetTokenizedStocksPercent: number;
         targetTokenizedGoldPercent: number;
+        targetDefiYieldPercent: number;
+        targetBluechipCryptoPercent: number;
         strategyName: string;
+        riskScore?: number;
     }): Promise<User | null> {
         try {
             const user = await this.repo.findOne({ where: { id: userId } });
             if (!user) return null;
 
             user.targetStableYieldsPercent = strategy.targetStableYieldsPercent;
-            user.targetTokenizedStocksPercent = strategy.targetTokenizedStocksPercent;
             user.targetTokenizedGoldPercent = strategy.targetTokenizedGoldPercent;
+            user.targetDefiYieldPercent = strategy.targetDefiYieldPercent;
+            user.targetBluechipCryptoPercent = strategy.targetBluechipCryptoPercent;
             user.strategyName = strategy.strategyName;
+            if (strategy.riskScore !== undefined) {
+                user.riskScore = strategy.riskScore;
+            }
 
             return await this.repo.save(user);
         } catch (error) {
             throw error;
         }
+    }
+
+    // Mark quiz as completed
+    async markQuizCompleted(userId: string): Promise<User | null> {
+        try {
+            const user = await this.repo.findOne({ where: { id: userId } });
+            if (!user) return null;
+
+            user.hasCompletedQuiz = true;
+            return await this.repo.save(user);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // Find user by ID (alias for getById for consistency)
+    async findById(userId: string): Promise<User | null> {
+        return this.getById(userId);
     }
 
     // Screen 8: Mark onboarding complete after wallet creation

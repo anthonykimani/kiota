@@ -165,6 +165,7 @@ export const quizApi = {
         name: string
         allocation: {
           stableYields: number
+          defiYield: number
           tokenizedStocks: number
           tokenizedGold: number
         }
@@ -173,6 +174,7 @@ export const quizApi = {
         riskLevel: string
         assets: {
           stableYields: string
+          defiYield: string
           tokenizedStocks: string
           tokenizedGold: string
         }
@@ -181,6 +183,7 @@ export const quizApi = {
 
   acceptStrategy: (sessionId: string, accepted: boolean, customAllocation?: {
     stableYields: number
+    defiYield: number
     tokenizedStocks: number
     tokenizedGold: number
   }) =>
@@ -211,6 +214,13 @@ export const dashboardApi = {
         totalPoints: number
         level: number
       }
+      wallet?: {
+        usdcBalance: number
+        stableYieldBalance: number
+        defiYieldBalance: number
+        tokenizedStocksBalance: number
+        tokenizedGoldBalance: number
+      }
       portfolio: {
         totalValueUsd: number
         totalValueKes: number
@@ -228,6 +238,16 @@ export const dashboardApi = {
         apy?: number
         avgReturn?: number
         requiresTier2?: boolean
+        price?: number
+        change?: number
+        changePercent?: number
+      }>
+      marketPerformance?: Array<{
+        symbol: string
+        name: string
+        price: number
+        change: number
+        changePercent: number
       }>
       totalMonthlyEarnings: number
       goals: Array<{
@@ -320,11 +340,13 @@ export const portfolioApi = {
       estimatedCompletionTime: string
       currentAllocation: {
         stableYields: number
+        defiYield: number
         tokenizedStocks: number
         tokenizedGold: number
       }
       targetAllocation: {
         stableYields: number
+        defiYield: number
         tokenizedStocks: number
         tokenizedGold: number
       }
@@ -400,10 +422,27 @@ export const depositApi = {
       estimatedCompletionTime: string
       allocation: {
         stableYields: number
+        defiYield: number
         tokenizedStocks: number
         tokenizedGold: number
       }
     }>('/deposit/convert', { depositSessionId }),
+
+  convertWalletBalance: (amountUsd?: number) =>
+    api.post<{
+      conversionGroupId: string
+      convertedAmount: number
+      status: string
+      swaps: Array<{ transactionId: string; toAsset: string; amount: number }>
+      swapCount: number
+      estimatedCompletionTime: string
+      allocation: {
+        stableYields: number
+        defiYield: number
+        tokenizedStocks: number
+        tokenizedGold: number
+      }
+    }>('/deposit/convert-wallet', { amountUsd }),
 
   getReview: (depositSessionId: string) =>
     api.post<{
@@ -411,6 +450,7 @@ export const depositApi = {
       amountUsd: number
       allocation: {
         stableYields: number
+        defiYield: number
         tokenizedStocks: number
         tokenizedGold: number
       }

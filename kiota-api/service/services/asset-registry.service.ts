@@ -5,9 +5,9 @@ import { getTokenAddress, TOKEN_METADATA } from '../configs/tokens.config';
 
 export type AssetClassKey =
   | 'stable_yields'
-  | 'tokenized_stocks'
+  | 'defi_yield'
   | 'tokenized_gold'
-  | 'blue_chip_crypto'
+  | 'bluechip_crypto'
   | 'cash';
 
 export class AssetRegistryService {
@@ -41,8 +41,9 @@ export class AssetRegistryService {
       return asset.address;
     }
 
-    if ((asset.symbol as keyof typeof TOKEN_METADATA) in TOKEN_METADATA) {
-      return getTokenAddress(asset.symbol as keyof typeof TOKEN_METADATA, network);
+    const normalizedSymbol = asset.symbol.toUpperCase() as keyof typeof TOKEN_METADATA;
+    if (normalizedSymbol in TOKEN_METADATA) {
+      return getTokenAddress(normalizedSymbol, network);
     }
 
     throw new Error(`Missing address for asset ${asset.symbol} on ${network}`);
@@ -53,8 +54,9 @@ export class AssetRegistryService {
       return asset.decimals;
     }
 
-    if ((asset.symbol as keyof typeof TOKEN_METADATA) in TOKEN_METADATA) {
-      return TOKEN_METADATA[asset.symbol as keyof typeof TOKEN_METADATA].decimals;
+    const normalizedSymbol = asset.symbol.toUpperCase() as keyof typeof TOKEN_METADATA;
+    if (normalizedSymbol in TOKEN_METADATA) {
+      return TOKEN_METADATA[normalizedSymbol].decimals;
     }
 
     return 18;

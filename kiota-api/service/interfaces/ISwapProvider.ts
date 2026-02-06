@@ -54,9 +54,9 @@ export interface SwapParams {
  * Swap execution result
  */
 export interface SwapResult {
-  orderId: string;          // Transaction hash (Classic) or order hash (Fusion)
+  orderId: string;          // Transaction hash (Classic) or order hash (Fusion/0x)
   status: 'pending' | 'processing' | 'completed' | 'failed';
-  provider: 'classic' | 'fusion';  // Which provider executed this swap
+  provider: 'classic' | 'fusion' | 'zerox';  // Which provider executed this swap
   txHash?: string;          // Transaction hash (available immediately for Classic)
   estimatedOutput?: string; // Estimated output amount in wei
 }
@@ -65,13 +65,13 @@ export interface SwapResult {
  * Swap status response
  */
 export interface SwapStatus {
-  orderId: string;          // Transaction hash (Classic) or order hash (Fusion)
+  orderId: string;          // Transaction hash (Classic) or order hash (Fusion/0x)
   status: 'pending' | 'processing' | 'completed' | 'failed';
-  provider: 'classic' | 'fusion';
+  provider: 'classic' | 'fusion' | 'zerox';
   txHash?: string;          // Blockchain transaction hash
   actualOutput?: string;    // Actual output amount in wei (when completed)
   reason?: string;          // Failure reason (if failed)
-  fills?: Array<{           // Fill information (Fusion only)
+  fills?: Array<{           // Fill information (Fusion/0x)
     txHash: string;
     filledAmount: string;
     timestamp: number;

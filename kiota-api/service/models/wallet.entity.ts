@@ -65,16 +65,19 @@ export class Wallet {
   usdcBalance: number;
 
   @Column({ type: 'decimal', precision: 18, scale: 8, default: 0 })
-  stableYieldBalance: number;
+  stableYieldBalance: number; // USDM
 
   @Column({ type: 'decimal', precision: 18, scale: 8, default: 0 })
-  tokenizedStocksBalance: number;
+  tokenizedGoldBalance: number; // PAXG
 
   @Column({ type: 'decimal', precision: 18, scale: 8, default: 0 })
-  tokenizedGoldBalance: number;
+  defiYieldBalance: number; // USDE
 
   @Column({ type: 'decimal', precision: 18, scale: 8, default: 0 })
-  gasBalance: number; // For gas
+  bluechipCryptoBalance: number; // WETH
+
+  @Column({ type: 'decimal', precision: 18, scale: 8, default: 0 })
+  gasBalance: number; // For gas (ETH)
 
   @Column({ type: 'timestamp', nullable: true })
   balancesLastUpdated: Date;

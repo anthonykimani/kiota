@@ -33,8 +33,8 @@ export class AIAdvisorSessionRepository {
     async saveStrategyResponse(sessionId: string, response: {
         allocation: {
             stableYields: number;
-            tokenizedStocks: number;
             tokenizedGold: number;
+            bluechipCrypto: number;
         };
         strategyName: string;
         rationale: string;

@@ -114,6 +114,7 @@ const ReviewDeposit = () => {
 
     const allocationData = reviewData?.allocation ? {
         stableYields: reviewData.allocation.stableYields,
+        defiYield: reviewData.allocation.defiYield,
         tokenizedStocks: reviewData.allocation.tokenizedStocks,
         tokenizedGold: reviewData.allocation.tokenizedGold,
     } : null
@@ -169,6 +170,14 @@ const ReviewDeposit = () => {
                         Confirm & Deposit
                     </Button>
                 </>
+            )}
+
+            {!reviewData && (
+                <Button buttonColor="primary" className="w-full" disabled>
+                    {status === 'received'
+                        ? 'Confirming onchain...'
+                        : 'Waiting for deposit...'}
+                </Button>
             )}
         </ScreenWrapper>
     )

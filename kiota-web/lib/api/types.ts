@@ -15,6 +15,11 @@ export interface User {
 export interface Wallet {
   address: string
   provider: string
+  usdcBalance?: number
+  stableYieldBalance?: number
+  defiYieldBalance?: number
+  tokenizedStocksBalance?: number
+  tokenizedGoldBalance?: number
 }
 
 export interface Portfolio {
@@ -25,6 +30,7 @@ export interface Portfolio {
 // Strategy/Quiz types
 export interface StrategyAllocation {
   stableYields: number
+  defiYield: number
   tokenizedStocks: number
   tokenizedGold: number
 }
@@ -37,6 +43,7 @@ export interface Strategy {
   riskLevel: string
   assets: {
     stableYields: string
+    defiYield: string
     tokenizedStocks: string
     tokenizedGold: string
   }
@@ -79,6 +86,9 @@ export interface DashboardAsset {
   apy?: number
   avgReturn?: number
   requiresTier2?: boolean
+  price?: number
+  change?: number
+  changePercent?: number
 }
 
 export interface DashboardGoal {
@@ -101,8 +111,31 @@ export interface Dashboard {
     totalPoints: number
     level: number
   }
+  chain?: {
+    id: string
+    name: string
+    isTestnet: boolean
+  }
+  onchain?: {
+    hasHoldings: boolean
+    totalValueUsd: number
+  }
+  wallet?: {
+    usdcBalance: number
+    stableYieldBalance: number
+    defiYieldBalance: number
+    tokenizedStocksBalance: number
+    tokenizedGoldBalance: number
+  }
   portfolio: DashboardPortfolio
   assets: DashboardAsset[]
+  marketPerformance?: Array<{
+    symbol: string
+    name: string
+    price: number
+    change: number
+    changePercent: number
+  }>
   totalMonthlyEarnings: number
   goals: DashboardGoal[]
   quickActions: {
@@ -256,6 +289,7 @@ export interface DepositReviewResponse {
   amountUsd: number
   allocation: {
     stableYields: number
+    defiYield: number
     tokenizedStocks: number
     tokenizedGold: number
   }

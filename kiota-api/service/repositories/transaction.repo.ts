@@ -1,4 +1,4 @@
-import { Repository } from "typeorm";
+import { Repository, MoreThanOrEqual } from "typeorm";
 import dotenv from "dotenv";
 import AppDataSource from "../configs/ormconfig";
 import { Transaction } from "../models/transaction.entity";
@@ -29,8 +29,9 @@ export class TransactionRepository {
         logIndex: number;
         allocation: {
             stableYields: number;
-            tokenizedStocks: number;
+            defiYield: number;
             tokenizedGold: number;
+            bluechipCrypto: number;
         };
     }): Promise<Transaction> {
         const txHash = data.txHash.toLowerCase();
@@ -100,8 +101,9 @@ export class TransactionRepository {
         mpesaPhoneNumber: string;
         allocation: {
             stableYields: number;
-            tokenizedStocks: number;
+            defiYield: number;
             tokenizedGold: number;
+            bluechipCrypto: number;
         };
         feeKes?: number;
         feeUsd?: number;
@@ -231,6 +233,22 @@ export class TransactionRepository {
                 where: { userId, status: TransactionStatus.COMPLETED },
                 order: { createdAt: 'DESC' },
                 take: limit
+            });
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // Get completed transactions for history (after a start date)
+    async getCompletedForHistory(userId: string, startDate: Date): Promise<Transaction[]> {
+        try {
+            return await this.repo.find({
+                where: {
+                    userId,
+                    status: TransactionStatus.COMPLETED,
+                    completedAt: MoreThanOrEqual(startDate),
+                } as any,
+                order: { completedAt: 'ASC' },
             });
         } catch (error) {
             throw error;

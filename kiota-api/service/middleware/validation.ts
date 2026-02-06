@@ -71,13 +71,14 @@ export const depositInitiateSchema = z.object({
   mpesaPhoneNumber: z.string()
     .regex(/^\+254\d{9}$/, 'Invalid M-Pesa phone number format. Use +254XXXXXXXXX'),
   customAllocation: z.object({
-    stableYields: z.number().min(0).max(100),
-    tokenizedStocks: z.number().min(0).max(100),
-    tokenizedGold: z.number().min(0).max(100)
+    stableYields: z.number().min(10).max(100),
+    tokenizedGold: z.number().min(0).max(100),
+    defiYield: z.number().min(0).max(100),
+    bluechipCrypto: z.number().min(0).max(100)
   }).optional().refine(
     (data) => {
       if (!data) return true;
-      return Math.abs(data.stableYields + data.tokenizedStocks + data.tokenizedGold - 100) < 0.01;
+      return Math.abs(data.stableYields + data.tokenizedGold + data.defiYield + data.bluechipCrypto - 100) < 0.01;
     },
     { message: 'Allocation must add up to 100%' }
   )
@@ -88,28 +89,40 @@ export const depositInitiateSchema = z.object({
  */
 export const quizSubmitSchema = z.object({
   answers: z.object({
-    primaryGoal: z.string().optional(),
-    investmentTimeline: z.string().optional(),
-    riskTolerance: z.string(),
-    investmentExperience: z.string(),
-    currentSavingsRange: z.string().optional(),
-    monthlySavingsRange: z.string().optional(),
-    comfortableWithDollars: z.boolean().optional(),
-    investmentPriorities: z.array(z.string()).optional()
+    age: z.string().optional(),
+    timeline: z.string().optional(),
+    emergencyFund: z.string().optional(),
+    marketDrop: z.string().optional(),
+    volatility: z.string().optional(),
+    cryptoComfort: z.string().optional(),
   }).optional(),
   // Also support flat structure for backwards compatibility
-  goal: z.string().optional(),
+  age: z.string().optional(),
   timeline: z.string().optional(),
-  riskTolerance: z.string().optional(),
-  investmentExperience: z.string().optional()
+  emergencyFund: z.string().optional(),
+  marketDrop: z.string().optional(),
+  volatility: z.string().optional(),
+  cryptoComfort: z.string().optional(),
 }).refine(
   (data) => {
     // Either answers object or flat fields must have required values
-    const hasAnswers = data.answers?.riskTolerance && data.answers?.investmentExperience;
-    const hasFlat = data.riskTolerance && data.investmentExperience;
+    const hasAnswers =
+      data.answers?.age &&
+      data.answers?.timeline &&
+      data.answers?.emergencyFund &&
+      data.answers?.marketDrop &&
+      data.answers?.volatility &&
+      data.answers?.cryptoComfort;
+    const hasFlat =
+      data.age &&
+      data.timeline &&
+      data.emergencyFund &&
+      data.marketDrop &&
+      data.volatility &&
+      data.cryptoComfort;
     return hasAnswers || hasFlat;
   },
-  { message: 'riskTolerance and investmentExperience are required' }
+  { message: 'All quiz answers are required' }
 );
 
 /**
@@ -119,13 +132,14 @@ export const acceptStrategySchema = z.object({
   sessionId: z.string().uuid('Invalid session ID'),
   accepted: z.boolean(),
   customAllocation: z.object({
-    stableYields: z.number().min(0).max(100),
-    tokenizedStocks: z.number().min(0).max(100),
-    tokenizedGold: z.number().min(0).max(100)
+    stableYields: z.number().min(10).max(100),
+    tokenizedGold: z.number().min(0).max(100),
+    defiYield: z.number().min(0).max(100),
+    bluechipCrypto: z.number().min(0).max(100)
   }).optional().refine(
     (data) => {
       if (!data) return true;
-      return Math.abs(data.stableYields + data.tokenizedStocks + data.tokenizedGold - 100) < 0.01;
+      return Math.abs(data.stableYields + data.tokenizedGold + data.defiYield + data.bluechipCrypto - 100) < 0.01;
     },
     { message: 'Allocation must add up to 100%' }
   )

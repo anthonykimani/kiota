@@ -22,9 +22,8 @@ export function createMockUser(overrides?: Partial<User>): Partial<User> {
     firstName: 'Test',
     lastName: 'User',
     targetStableYieldsPercent: 80,
-    targetTokenizedStocksPercent: 15,
     targetTokenizedGoldPercent: 5,
-    targetBlueChipCryptoPercent: 0,
+    targetBluechipCryptoPercent: 15,
     firstDepositSubsidyUsed: false,
     hasCompletedOnboarding: true,
     hasCompletedQuiz: true,
@@ -43,9 +42,8 @@ export function createMockWallet(overrides?: Partial<Wallet>): Partial<Wallet> {
     address: '0x' + '1'.repeat(40), // Mock Ethereum address
     chain: 'base',
     stableYieldBalance: 0,
-    tokenizedStocksBalance: 0,
     tokenizedGoldBalance: 0,
-    blueChipCryptoBalance: 0,
+    bluechipCryptoBalance: 0,
     gasBalance: 0,
     ...overrides
   };
@@ -72,8 +70,8 @@ export function createMockTransaction(overrides?: Partial<Transaction>): Partial
     subsidyAmount: 0,
     allocation: {
       stableYields: 80,
-      tokenizedStocks: 15,
-      tokenizedGold: 5
+      tokenizedGold: 5,
+      bluechipCrypto: 15
     },
     ...overrides
   };
@@ -88,9 +86,8 @@ export function createMockPortfolio(overrides?: Partial<Portfolio>): Partial<Por
     userId: randomUUID(),
     totalValueUsd: 0,
     stableYieldsValueUsd: 0,
-    tokenizedStocksValueUsd: 0,
     tokenizedGoldValueUsd: 0,
-    blueChipCryptoValueUsd: 0,
+    bluechipCryptoValueUsd: 0,
     totalDepositsUsd: 0,
     totalWithdrawalsUsd: 0,
     allTimeReturnUsd: 0,

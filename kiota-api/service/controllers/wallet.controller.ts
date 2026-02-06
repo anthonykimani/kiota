@@ -111,7 +111,8 @@ class WalletController extends Controller {
                         usdcAllocated,
                         usdcUnallocated,
                         stableYield: wallet.stableYieldBalance,
-                        tokenizedStocks: wallet.tokenizedStocksBalance,
+                        defiYield: wallet.defiYieldBalance,
+                        bluechipCrypto: wallet.bluechipCryptoBalance,
                         tokenizedGold: wallet.tokenizedGoldBalance,
                         gas: wallet.gasBalance
                     },
@@ -215,7 +216,7 @@ class WalletController extends Controller {
                 balances: {
                     usdc: wallet.usdcBalance,
                     stableYield: wallet.stableYieldBalance,
-                    tokenizedStocks: wallet.tokenizedStocksBalance,
+                    bluechipCrypto: wallet.bluechipCryptoBalance,
                     tokenizedGold: wallet.tokenizedGoldBalance,
                     gas: wallet.gasBalance
                 },

@@ -47,7 +47,7 @@ describe('Deposit Flow Integration Tests', () => {
       const user = await userRepo.create(createMockUser({
         id: userId,
         targetStableYieldsPercent: 80,
-        targetTokenizedStocksPercent: 15,
+        targetBluechipCryptoPercent: 15,
         targetTokenizedGoldPercent: 5
       }));
 
@@ -119,7 +119,7 @@ describe('Deposit Flow Integration Tests', () => {
         logIndex: blockchainEvent.logIndex,
         allocation: {
           stableYields: 80,
-          tokenizedStocks: 15,
+          bluechipCrypto: 15,
           tokenizedGold: 5
         }
       });
@@ -146,7 +146,7 @@ describe('Deposit Flow Integration Tests', () => {
         logIndex: blockchainEvent.logIndex,
         allocation: {
           stableYields: 80,
-          tokenizedStocks: 15,
+          bluechipCrypto: 15,
           tokenizedGold: 5
         }
       });
@@ -288,7 +288,7 @@ describe('Deposit Flow Integration Tests', () => {
         mpesaPhoneNumber: '+254712345678',
         allocation: {
           stableYields: 80,
-          tokenizedStocks: 15,
+          bluechipCrypto: 15,
           tokenizedGold: 5
         }
       });
@@ -328,7 +328,7 @@ describe('Deposit Flow Integration Tests', () => {
         mpesaPhoneNumber: '+254712345678',
         allocation: {
           stableYields: 80,
-          tokenizedStocks: 15,
+          bluechipCrypto: 15,
           tokenizedGold: 5
         }
       });
@@ -366,7 +366,7 @@ describe('Deposit Flow Integration Tests', () => {
       const user = await userRepo.create(createMockUser({
         id: userId,
         targetStableYieldsPercent: 60,
-        targetTokenizedStocksPercent: 30,
+        targetBluechipCryptoPercent: 30,
         targetTokenizedGoldPercent: 10
       }));
 
@@ -374,7 +374,7 @@ describe('Deposit Flow Integration Tests', () => {
         userId,
         address: '0xUserWallet',
         stableYieldBalance: 0,
-        tokenizedStocksBalance: 0,
+        bluechipCryptoBalance: 0,
         tokenizedGoldBalance: 0
       }));
 
@@ -439,7 +439,7 @@ describe('Deposit Flow Integration Tests', () => {
         logIndex: event.logIndex,
         allocation: {
           stableYields: 60,
-          tokenizedStocks: 30,
+          bluechipCrypto: 30,
           tokenizedGold: 10
         }
       });
@@ -450,7 +450,7 @@ describe('Deposit Flow Integration Tests', () => {
       // 5. Update portfolio (simulating controller logic)
       await portfolioRepo.updateValues(userId, {
         stableYieldsValueUsd: 1000 * 0.60,
-        tokenizedStocksValueUsd: 1000 * 0.30,
+        bluechipCryptoValueUsd: 1000 * 0.30,
         tokenizedGoldValueUsd: 1000 * 0.10,
         kesUsdRate: 0
       });
@@ -467,7 +467,7 @@ describe('Deposit Flow Integration Tests', () => {
 
       const finalPortfolio = await portfolioRepo.getByUserId(userId);
       expect(Number(finalPortfolio?.stableYieldsValueUsd)).toBe(600);
-      expect(Number(finalPortfolio?.tokenizedStocksValueUsd)).toBe(300);
+      expect(Number(finalPortfolio?.bluechipCryptoValueUsd)).toBe(300);
       expect(Number(finalPortfolio?.tokenizedGoldValueUsd)).toBe(100);
       expect(Number(finalPortfolio?.totalDepositsUsd)).toBe(1000);
 
@@ -499,7 +499,7 @@ describe('Deposit Flow Integration Tests', () => {
         mpesaPhoneNumber: '+254712345678',
         allocation: {
           stableYields: 80,
-          tokenizedStocks: 15,
+          bluechipCrypto: 15,
           tokenizedGold: 5
         },
         feeKes: 200,
@@ -537,7 +537,7 @@ describe('Deposit Flow Integration Tests', () => {
       // 5. Verify portfolio would be updated (simulated in controller)
       await portfolioRepo.updateValues(userId, {
         stableYieldsValueUsd: 100 * 0.80,
-        tokenizedStocksValueUsd: 100 * 0.15,
+        bluechipCryptoValueUsd: 100 * 0.15,
         tokenizedGoldValueUsd: 100 * 0.05,
         kesUsdRate: 100
       });

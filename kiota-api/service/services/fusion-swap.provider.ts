@@ -52,7 +52,7 @@ class PrivyProviderConnector {
       throw new Error(`Wallet not found for address ${walletAddress}`);
     }
 
-    const privyWalletId = wallet.privyWalletId || wallet.privyUserId;
+    const privyWalletId = wallet.privyWalletId;
 
     if (!privyWalletId) {
       throw new Error(`Privy wallet ID not found for address ${walletAddress}`);
@@ -186,9 +186,26 @@ export class FusionSwapProvider implements ISwapProvider {
         },
         raw: quote as unknown as Record<string, any>,
       };
-    } catch (error) {
-      logger.error('Failed to fetch Fusion quote', error as Error);
-      throw error;
+    } catch (error: any) {
+      // Capture full error details for debugging
+      const errorDetails = {
+        message: error?.message,
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        responseData: error?.response?.data,
+        code: error?.code,
+        fromToken: fromToken.substring(0, 10) + '...',
+        toToken: toToken.substring(0, 10) + '...',
+        amount,
+      };
+      
+      logger.error('Failed to fetch Fusion quote', error?.message, errorDetails);
+      
+      const enhancedError = new Error(
+        `Fusion quote failed: ${error?.message}${error?.response?.data ? ` - API Response: ${JSON.stringify(error.response.data)}` : ''}`
+      );
+      (enhancedError as any).originalError = error;
+      throw enhancedError;
     }
   }
 
@@ -229,9 +246,27 @@ export class FusionSwapProvider implements ISwapProvider {
         txHash: undefined, // Transaction hash not available until order is filled
         estimatedOutput: orderResult.quoteId, // Store quoteId in estimatedOutput field
       };
-    } catch (error) {
-      logger.error('Fusion swap execution failed', error as Error);
-      throw error;
+    } catch (error: any) {
+      // Capture full error details for debugging
+      const errorDetails = {
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        responseData: error?.response?.data,
+        code: error?.code,
+        fromToken: fromToken.substring(0, 10) + '...',
+        toToken: toToken.substring(0, 10) + '...',
+        amount,
+        userAddress: userAddress.substring(0, 10) + '...',
+      };
+      
+      logger.error('Fusion swap execution failed', error?.message, errorDetails);
+      
+      // Rethrow with more context
+      const enhancedError = new Error(
+        `Fusion swap failed: ${error?.message}${error?.response?.data ? ` - API Response: ${JSON.stringify(error.response.data)}` : ''}`
+      );
+      (enhancedError as any).originalError = error;
+      throw enhancedError;
     }
   }
 

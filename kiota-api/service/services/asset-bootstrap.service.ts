@@ -39,6 +39,18 @@ export async function bootstrapAssets(): Promise<void> {
     });
   }
 
+  const legacyBcspx = await assetRepo.getBySymbol('BCSPX');
+  if (legacyBcspx) {
+    await assetRepo.upsert({
+      symbol: legacyBcspx.symbol,
+      name: legacyBcspx.name,
+      assetClassId: legacyBcspx.assetClassId,
+      decimals: legacyBcspx.decimals,
+      isPrimary: false,
+      isActive: false,
+    });
+  }
+
   logger.info('Asset bootstrap complete', {
     classes: DEFAULT_ASSET_CLASSES.length,
     assets: DEFAULT_ASSETS.length,

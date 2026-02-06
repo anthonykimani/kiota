@@ -17,6 +17,7 @@ router.post('/review', requireInternalAuth, DepositController.getDepositReview);
 
 // Deposit conversion (USDC → target allocation)
 router.post('/convert', requireInternalAuth, DepositController.convertDeposit);
+router.post('/convert-wallet', requireInternalAuth, DepositController.convertWalletBalance);
 
 // Background job endpoint
 router.post('/complete', requireInternalAuth, DepositController.completeDeposit);

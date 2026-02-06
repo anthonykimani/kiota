@@ -56,7 +56,7 @@ class PrivyAuthController extends Controller {
             // Extract authentication method and details
             const authDetails = privyService.extractPrimaryAuth(privyUser);
 
-            // Extract wallet
+            // Extract wallet from linked accounts
             const walletDetails = privyService.extractWallet(privyUser);
             
             if (!walletDetails) {
@@ -67,6 +67,21 @@ class PrivyAuthController extends Controller {
                         ['No wallet found for user']
                     )
                 );
+            }
+
+            // Resolve the actual Privy wallet ID for server-side signing
+            // linked_accounts may return id=null for embedded wallets, so we use the Wallets API
+            let privyWalletId = walletDetails.id;
+            if (!privyWalletId) {
+                console.log(`[syncUser] Wallet ID null in linked_accounts for ${privyUser.id}, looking up via Wallets API...`);
+                const wallets = await privyService.getWalletsForUser(privyUser.id);
+                const matchingWallet = wallets.find(w => w.address.toLowerCase() === walletDetails.address.toLowerCase());
+                if (matchingWallet) {
+                    privyWalletId = matchingWallet.id;
+                    console.log(`[syncUser] Resolved wallet ID: ${privyWalletId}`);
+                } else {
+                    console.warn(`[syncUser] Could not resolve Privy wallet ID for user ${privyUser.id} - wallet signing will fail`);
+                }
             }
 
             // Check if user exists in our database
@@ -99,15 +114,27 @@ class PrivyAuthController extends Controller {
             await userRepo.save(user);
 
             // Check if wallet exists in our database
-            let wallet = await walletRepo.getByPrivyWalletId(walletDetails.id);
+            let wallet = await walletRepo.getByUserId(user.id);
 
             if (!wallet) {
-                // Create wallet record
+                // Also try by address
+                wallet = await walletRepo.getByAddress(walletDetails.address);
+            }
+
+            if (!wallet) {
+                // Create wallet record with both Privy user ID and wallet ID
                 wallet = await walletRepo.createFromPrivy({
                     userId: user.id,
-                    privyWalletId: walletDetails.id,
+                    privyUserId: privyUser.id,
+                    privyWalletId: privyWalletId || '',
                     address: walletDetails.address
                 });
+            } else if (!wallet.privyWalletId && privyWalletId) {
+                // Existing wallet missing privyWalletId — update it
+                console.log(`[syncUser] Updating existing wallet ${wallet.id} with privyWalletId: ${privyWalletId}`);
+                await walletRepo.updatePrivyIds(wallet.id, privyUser.id, privyWalletId);
+                wallet.privyUserId = privyUser.id;
+                wallet.privyWalletId = privyWalletId;
             }
 
             // Check if portfolio exists
@@ -293,6 +320,7 @@ class PrivyAuthController extends Controller {
             // Create wallet record
             const wallet = await walletRepo.createFromPrivy({
                 userId: user.id,
+                privyUserId: privyResult.user!.id,
                 privyWalletId: privyResult.wallet!.id,
                 address: privyResult.wallet!.address
             });
@@ -315,7 +343,7 @@ class PrivyAuthController extends Controller {
                         },
                         wallet: {
                             address: wallet.address,
-                            privyWalletId: wallet.privyUserId
+                            privyWalletId: wallet.privyWalletId
                         },
                         portfolio: {
                             id: portfolio.id

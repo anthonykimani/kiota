@@ -54,6 +54,14 @@ async function startWorker() {
       throw new Error('Failed to connect to Redis');
     }
 
+    console.log('🔁 Resuming queues (if paused)...');
+    await Promise.all([
+      DEPOSIT_COMPLETION_QUEUE.resume(),
+      ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE.resume(),
+      SWAP_EXECUTION_QUEUE.resume(),
+      SWAP_CONFIRMATION_QUEUE.resume(),
+    ]);
+
     // Step 3: Register job processors
     console.log('\n📝 Registering job processors...');
 

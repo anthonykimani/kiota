@@ -29,9 +29,14 @@ export enum PaymentMethod {
 export enum AssetType {
   KES = 'kes',
   USDC = 'usdc',
+  USDT = 'usdt',
+  USDE = 'usde',
+  PYUSD = 'pyusd',
   USDM = 'usdm',
-  BCSPX = 'bcspx',
   PAXG = 'paxg',
+  XAUT = 'xaut',
   BTC = 'btc',
   ETH = 'eth',
+  WBTC = 'wbtc',
+  WETH = 'weth',
 }
