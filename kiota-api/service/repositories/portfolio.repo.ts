@@ -12,7 +12,7 @@ export class PortfolioRepository {
         dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
     }
 
-    // Screen 8: Create portfolio after wallet creation
+    // Create portfolio after wallet creation
     async createPortfolio(userId: string): Promise<Portfolio> {
         try {
             const portfolio = this.repo.create({
@@ -20,11 +20,13 @@ export class PortfolioRepository {
                 totalValueUsd: 0,
                 totalValueKes: 0,
                 stableYieldsValueUsd: 0,
-                tokenizedStocksValueUsd: 0,
                 tokenizedGoldValueUsd: 0,
+                defiYieldValueUsd: 0,
+                bluechipCryptoValueUsd: 0,
                 stableYieldsPercent: 0,
-                tokenizedStocksPercent: 0,
                 tokenizedGoldPercent: 0,
+                defiYieldPercent: 0,
+                bluechipCryptoPercent: 0,
                 totalDeposited: 0,
                 totalWithdrawn: 0,
                 totalGainsUsd: 0,
@@ -48,30 +50,37 @@ export class PortfolioRepository {
         }
     }
 
-    // Screen 10e & 11: Update portfolio values after deposit
+    // Update portfolio values after deposit/swap
     async updateValues(userId: string, values: {
         stableYieldsValueUsd: number;
-        tokenizedStocksValueUsd: number;
         tokenizedGoldValueUsd: number;
+        defiYieldValueUsd: number;
+        bluechipCryptoValueUsd: number;
         kesUsdRate: number;
     }): Promise<Portfolio | null> {
         try {
             const portfolio = await this.getByUserId(userId);
             if (!portfolio) return null;
 
-            const totalUsd = values.stableYieldsValueUsd + values.tokenizedStocksValueUsd + values.tokenizedGoldValueUsd;
+            const totalUsd =
+                values.stableYieldsValueUsd +
+                values.tokenizedGoldValueUsd +
+                values.defiYieldValueUsd +
+                values.bluechipCryptoValueUsd;
 
             portfolio.stableYieldsValueUsd = values.stableYieldsValueUsd;
-            portfolio.tokenizedStocksValueUsd = values.tokenizedStocksValueUsd;
             portfolio.tokenizedGoldValueUsd = values.tokenizedGoldValueUsd;
+            portfolio.defiYieldValueUsd = values.defiYieldValueUsd;
+            portfolio.bluechipCryptoValueUsd = values.bluechipCryptoValueUsd;
             portfolio.totalValueUsd = totalUsd;
             portfolio.totalValueKes = totalUsd * values.kesUsdRate;
 
             // Calculate percentages
             if (totalUsd > 0) {
                 portfolio.stableYieldsPercent = (values.stableYieldsValueUsd / totalUsd) * 100;
-                portfolio.tokenizedStocksPercent = (values.tokenizedStocksValueUsd / totalUsd) * 100;
                 portfolio.tokenizedGoldPercent = (values.tokenizedGoldValueUsd / totalUsd) * 100;
+                portfolio.defiYieldPercent = (values.defiYieldValueUsd / totalUsd) * 100;
+                portfolio.bluechipCryptoPercent = (values.bluechipCryptoValueUsd / totalUsd) * 100;
             }
 
             return await this.repo.save(portfolio);
@@ -83,8 +92,9 @@ export class PortfolioRepository {
     // Increment portfolio values (for deposits)
     async incrementValues(userId: string, values: {
         stableYieldsValueUsd: number;
-        tokenizedStocksValueUsd: number;
         tokenizedGoldValueUsd: number;
+        defiYieldValueUsd: number;
+        bluechipCryptoValueUsd: number;
         kesUsdRate: number;
     }): Promise<Portfolio | null> {
         try {
@@ -92,20 +102,23 @@ export class PortfolioRepository {
             if (!portfolio) return null;
 
             const nextStable = Number(portfolio.stableYieldsValueUsd) + values.stableYieldsValueUsd;
-            const nextStocks = Number(portfolio.tokenizedStocksValueUsd) + values.tokenizedStocksValueUsd;
             const nextGold = Number(portfolio.tokenizedGoldValueUsd) + values.tokenizedGoldValueUsd;
-            const totalUsd = nextStable + nextStocks + nextGold;
+            const nextDefiYield = Number(portfolio.defiYieldValueUsd) + values.defiYieldValueUsd;
+            const nextCrypto = Number(portfolio.bluechipCryptoValueUsd) + values.bluechipCryptoValueUsd;
+            const totalUsd = nextStable + nextGold + nextDefiYield + nextCrypto;
 
             portfolio.stableYieldsValueUsd = nextStable;
-            portfolio.tokenizedStocksValueUsd = nextStocks;
             portfolio.tokenizedGoldValueUsd = nextGold;
+            portfolio.defiYieldValueUsd = nextDefiYield;
+            portfolio.bluechipCryptoValueUsd = nextCrypto;
             portfolio.totalValueUsd = totalUsd;
             portfolio.totalValueKes = totalUsd * values.kesUsdRate;
 
             if (totalUsd > 0) {
                 portfolio.stableYieldsPercent = (nextStable / totalUsd) * 100;
-                portfolio.tokenizedStocksPercent = (nextStocks / totalUsd) * 100;
                 portfolio.tokenizedGoldPercent = (nextGold / totalUsd) * 100;
+                portfolio.defiYieldPercent = (nextDefiYield / totalUsd) * 100;
+                portfolio.bluechipCryptoPercent = (nextCrypto / totalUsd) * 100;
             }
 
             return await this.repo.save(portfolio);

@@ -5,9 +5,9 @@ import { getTokenAddress, TOKEN_METADATA } from '../configs/tokens.config';
 
 export type AssetClassKey =
   | 'stable_yields'
-  | 'tokenized_stocks'
+  | 'defi_yield'
   | 'tokenized_gold'
-  | 'blue_chip_crypto'
+  | 'bluechip_crypto'
   | 'cash';
 
 export class AssetRegistryService {

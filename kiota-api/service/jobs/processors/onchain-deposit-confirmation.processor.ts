@@ -297,8 +297,9 @@ export async function processOnchainDepositConfirmation(
 
     const allocation = {
       stableYields: user.targetStableYieldsPercent || 80,
-      tokenizedStocks: user.targetTokenizedStocksPercent || 15,
+      defiYield: user.targetDefiYieldPercent || 0,
       tokenizedGold: user.targetTokenizedGoldPercent || 5,
+      bluechipCrypto: user.targetBluechipCryptoPercent || 15,
     };
 
     logger.info('User allocation retrieved', { allocation });

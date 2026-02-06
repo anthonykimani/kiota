@@ -29,8 +29,9 @@ export class TransactionRepository {
         logIndex: number;
         allocation: {
             stableYields: number;
-            tokenizedStocks: number;
+            defiYield: number;
             tokenizedGold: number;
+            bluechipCrypto: number;
         };
     }): Promise<Transaction> {
         const txHash = data.txHash.toLowerCase();
@@ -100,8 +101,9 @@ export class TransactionRepository {
         mpesaPhoneNumber: string;
         allocation: {
             stableYields: number;
-            tokenizedStocks: number;
+            defiYield: number;
             tokenizedGold: number;
+            bluechipCrypto: number;
         };
         feeKes?: number;
         feeUsd?: number;

@@ -27,7 +27,7 @@ export default function ResultPage() {
     setStrategy(nextStrategy)
 
     if (nextStrategy?.allocation) {
-      const { stableYields, tokenizedStocks, tokenizedGold } = nextStrategy.allocation
+      const { stableYields, defiYield, tokenizedStocks, tokenizedGold } = nextStrategy.allocation
       setPortfolioData([
         {
           assetClass: "preservation",
@@ -35,6 +35,13 @@ export default function ResultPage() {
           color: assetClassConfig.preservation.color,
           asset: nextStrategy.assets?.stableYields || "USDM",
           description: "Dollar-backed | yield-focused | Low risk",
+        },
+        {
+          assetClass: "yield",
+          value: defiYield,
+          color: assetClassConfig.yield.color,
+          asset: nextStrategy.assets?.defiYield || "USDE",
+          description: "On-chain yield | variable returns",
         },
         {
           assetClass: "growth",
@@ -89,6 +96,7 @@ export default function ResultPage() {
             riskLevel: ai.riskLevel || "",
             assets: ai.defaultAssets || {
               stableYields: "USDM",
+              defiYield: "USDE",
               tokenizedStocks: "bCSPX",
               tokenizedGold: "PAXG",
             },
@@ -131,12 +139,18 @@ export default function ResultPage() {
     },
     {
       icon: DataSvg,
+      title: `${strategy.assets?.defiYield || 'USDE'} • ${strategy.allocation.defiYield}%`,
+      titleColor: assetClassConfig.yield.textColor,
+      description: `On-chain yield allocation with variable returns.`,
+    },
+    {
+      icon: CrownSvg,
       title: `${strategy.assets?.tokenizedStocks || 'bCSPX'} • ${strategy.allocation.tokenizedStocks}%`,
       titleColor: assetClassConfig.growth.textColor,
       description: `Growth allocation aligned to your risk level.`,
     },
     {
-      icon: CrownSvg,
+      icon: ShieldSvg,
       title: `${strategy.assets?.tokenizedGold || 'PAXG'} • ${strategy.allocation.tokenizedGold}%`,
       titleColor: assetClassConfig.hedge.textColor,
       description: `Hedge allocation for downside protection.`,

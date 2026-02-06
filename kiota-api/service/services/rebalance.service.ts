@@ -26,8 +26,9 @@ const logger = createLogger('rebalance-service');
  */
 export interface Allocation {
   stableYields: number; // 0-100
-  tokenizedStocks: number; // 0-100
+  defiYield: number; // 0-100
   tokenizedGold: number; // 0-100
+  bluechipCrypto: number; // 0-100
 }
 
 /**
@@ -35,8 +36,9 @@ export interface Allocation {
  */
 export interface Balances {
   stableYields: number;
-  tokenizedStocks: number;
+  defiYield: number;
   tokenizedGold: number;
+  bluechipCrypto: number;
 }
 
 /**
@@ -67,8 +69,9 @@ class RebalanceService {
   needsRebalance(current: Allocation, target: Allocation): boolean {
     const drifts = [
       Math.abs(current.stableYields - target.stableYields),
-      Math.abs(current.tokenizedStocks - target.tokenizedStocks),
+      Math.abs(current.defiYield - target.defiYield),
       Math.abs(current.tokenizedGold - target.tokenizedGold),
+      Math.abs(current.bluechipCrypto - target.bluechipCrypto),
     ];
 
     const totalDrift = drifts.reduce((sum, d) => sum + d, 0);
@@ -110,11 +113,13 @@ class RebalanceService {
     const categoryDiffs = {
       stableYields:
         ((targetAllocation.stableYields - currentAllocation.stableYields) * totalValueUsd) / 100,
-      tokenizedStocks:
-        ((targetAllocation.tokenizedStocks - currentAllocation.tokenizedStocks) * totalValueUsd) /
-        100,
+      defiYield:
+        ((targetAllocation.defiYield - currentAllocation.defiYield) * totalValueUsd) / 100,
       tokenizedGold:
         ((targetAllocation.tokenizedGold - currentAllocation.tokenizedGold) * totalValueUsd) / 100,
+      bluechipCrypto:
+        ((targetAllocation.bluechipCrypto - currentAllocation.bluechipCrypto) * totalValueUsd) /
+        100,
     };
 
     logger.debug('Category value differences calculated', { categoryDiffs });
@@ -125,7 +130,7 @@ class RebalanceService {
 
     for (const [category, diff] of Object.entries(categoryDiffs)) {
       const classKey = this.mapAllocationKeyToClassKey(
-        category as 'stableYields' | 'tokenizedStocks' | 'tokenizedGold'
+        category as 'stableYields' | 'defiYield' | 'tokenizedGold' | 'bluechipCrypto'
       );
       const primaryAsset = await assetRegistry.getPrimaryAssetByClassKey(classKey);
 
@@ -280,8 +285,9 @@ class RebalanceService {
 
     const drift =
       Math.abs(currentAllocation.stableYields - targetAllocation.stableYields) +
-      Math.abs(currentAllocation.tokenizedStocks - targetAllocation.tokenizedStocks) +
-      Math.abs(currentAllocation.tokenizedGold - targetAllocation.tokenizedGold);
+      Math.abs(currentAllocation.defiYield - targetAllocation.defiYield) +
+      Math.abs(currentAllocation.tokenizedGold - targetAllocation.tokenizedGold) +
+      Math.abs(currentAllocation.bluechipCrypto - targetAllocation.bluechipCrypto);
 
     return {
       needsRebalance,
@@ -298,33 +304,38 @@ class RebalanceService {
    */
   calculateAllocation(balances: {
     stableYields: number;
-    tokenizedStocks: number;
+    defiYield: number;
     tokenizedGold: number;
+    bluechipCrypto: number;
   }): Allocation {
-    const total = balances.stableYields + balances.tokenizedStocks + balances.tokenizedGold;
+    const total =
+      balances.stableYields + balances.defiYield + balances.tokenizedGold + balances.bluechipCrypto;
 
     if (total <= 0) {
       return {
         stableYields: 0,
-        tokenizedStocks: 0,
+        defiYield: 0,
         tokenizedGold: 0,
+        bluechipCrypto: 0,
       };
     }
 
     return {
       stableYields: (balances.stableYields / total) * 100,
-      tokenizedStocks: (balances.tokenizedStocks / total) * 100,
+      defiYield: (balances.defiYield / total) * 100,
       tokenizedGold: (balances.tokenizedGold / total) * 100,
+      bluechipCrypto: (balances.bluechipCrypto / total) * 100,
     };
   }
 
   private mapAllocationKeyToClassKey(
-    key: 'stableYields' | 'tokenizedStocks' | 'tokenizedGold'
-  ): 'stable_yields' | 'tokenized_stocks' | 'tokenized_gold' {
+    key: 'stableYields' | 'defiYield' | 'tokenizedGold' | 'bluechipCrypto'
+  ): 'stable_yields' | 'defi_yield' | 'tokenized_gold' | 'bluechip_crypto' {
     const mapping = {
       stableYields: 'stable_yields',
-      tokenizedStocks: 'tokenized_stocks',
+      defiYield: 'defi_yield',
       tokenizedGold: 'tokenized_gold',
+      bluechipCrypto: 'bluechip_crypto',
     } as const;
 
     return mapping[key];
@@ -335,8 +346,9 @@ class RebalanceService {
   ): keyof Balances {
     const mapping: Record<keyof Allocation, keyof Balances> = {
       stableYields: 'stableYields',
-      tokenizedStocks: 'tokenizedStocks',
+      defiYield: 'defiYield',
       tokenizedGold: 'tokenizedGold',
+      bluechipCrypto: 'bluechipCrypto',
     };
 
     return mapping[key];

@@ -165,6 +165,7 @@ export const quizApi = {
         name: string
         allocation: {
           stableYields: number
+          defiYield: number
           tokenizedStocks: number
           tokenizedGold: number
         }
@@ -173,6 +174,7 @@ export const quizApi = {
         riskLevel: string
         assets: {
           stableYields: string
+          defiYield: string
           tokenizedStocks: string
           tokenizedGold: string
         }
@@ -181,6 +183,7 @@ export const quizApi = {
 
   acceptStrategy: (sessionId: string, accepted: boolean, customAllocation?: {
     stableYields: number
+    defiYield: number
     tokenizedStocks: number
     tokenizedGold: number
   }) =>
@@ -214,6 +217,7 @@ export const dashboardApi = {
       wallet?: {
         usdcBalance: number
         stableYieldBalance: number
+        defiYieldBalance: number
         tokenizedStocksBalance: number
         tokenizedGoldBalance: number
       }
@@ -336,11 +340,13 @@ export const portfolioApi = {
       estimatedCompletionTime: string
       currentAllocation: {
         stableYields: number
+        defiYield: number
         tokenizedStocks: number
         tokenizedGold: number
       }
       targetAllocation: {
         stableYields: number
+        defiYield: number
         tokenizedStocks: number
         tokenizedGold: number
       }
@@ -416,6 +422,7 @@ export const depositApi = {
       estimatedCompletionTime: string
       allocation: {
         stableYields: number
+        defiYield: number
         tokenizedStocks: number
         tokenizedGold: number
       }
@@ -431,6 +438,7 @@ export const depositApi = {
       estimatedCompletionTime: string
       allocation: {
         stableYields: number
+        defiYield: number
         tokenizedStocks: number
         tokenizedGold: number
       }
@@ -442,6 +450,7 @@ export const depositApi = {
       amountUsd: number
       allocation: {
         stableYields: number
+        defiYield: number
         tokenizedStocks: number
         tokenizedGold: number
       }

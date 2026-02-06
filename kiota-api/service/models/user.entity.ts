@@ -79,21 +79,25 @@ export class User {
   @Column({ type: 'simple-array', nullable: true })
   investmentPriorities: string[]; // safety, growth, high_returns, liquidity, learning
 
-  // Target Allocation (from AI recommendation)
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 80 })
+  // Target Allocation (from quiz scoring)
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 40 })
   targetStableYieldsPercent: number;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 15 })
-  targetTokenizedStocksPercent: number;
-
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 5 })
   targetTokenizedGoldPercent: number;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
-  targetBlueChipCryptoPercent: number;
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 30 })
+  targetDefiYieldPercent: number;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 15 })
+  targetBluechipCryptoPercent: number;
+
+  // Risk score from quiz (0-55)
+  @Column({ type: 'int', nullable: true })
+  riskScore: number;
 
   @Column({ type: 'varchar', length: 50, nullable: true })
-  strategyName: string; // conservative_grower, balanced, wealth_maximizer, etc.
+  strategyName: string; // ultra_conservative, conservative, balanced, growth, aggressive
 
   // Account Status
   @Column({

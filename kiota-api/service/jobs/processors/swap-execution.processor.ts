@@ -112,16 +112,16 @@ export async function processSwapExecution(
       throw new Error(`Wallet not found for user ${userId}`);
     }
 
-    if (!wallet.privyUserId) {
+    if (!wallet.privyWalletId) {
       logger.error('Privy wallet ID not found', undefined, { userId, walletId: wallet.id });
-      throw new Error(`Privy wallet ID not found for user ${userId}`);
+      throw new Error(`Privy wallet ID not found for user ${userId}. The wallet record is missing the privyWalletId field. User needs to re-login to populate it.`);
     }
 
     logger.info('Wallet retrieved', {
       walletAddress: wallet.address.substring(0, 10) + '...',
-      privyWalletId: wallet.privyUserId,
+      privyWalletId: wallet.privyWalletId,
     });
-    job.log(`User wallet: ${wallet.address.substring(0, 10)}... (Privy: ${wallet.privyUserId})`);
+    job.log(`User wallet: ${wallet.address.substring(0, 10)}... (Privy: ${wallet.privyWalletId})`);
 
     // Step 4: Get token addresses
     const network = process.env.ONEINCH_NETWORK || 'ethereum';
@@ -153,7 +153,7 @@ export async function processSwapExecution(
         toToken: toTokenAddress,
         amount: amountWei,
         userAddress: wallet.address,
-        privyWalletId: wallet.privyUserId,
+        privyWalletId: wallet.privyWalletId,
       });
     });
 

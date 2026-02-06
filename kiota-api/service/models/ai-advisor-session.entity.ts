@@ -41,9 +41,8 @@ export class AIAdvisorSession {
   aiResponse: {
     allocation?: {
       stableYields: number;
-      tokenizedStocks: number;
       tokenizedGold: number;
-      blueChipCrypto?: number;
+      bluechipCrypto?: number;
     };
     projections?: Record<string, any>;
     rationale?: string;

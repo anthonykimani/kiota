@@ -80,7 +80,8 @@ class DashboardController extends Controller {
             const monthlyChange = portfolio.thisMonthYield || 0;
 
             const stablePrimary = await assetRegistry.getPrimaryAssetByClassKey('stable_yields');
-            const stocksPrimary = await assetRegistry.getPrimaryAssetByClassKey('tokenized_stocks');
+            const defiYieldPrimary = await assetRegistry.getPrimaryAssetByClassKey('defi_yield');
+            const cryptoPrimary = await assetRegistry.getPrimaryAssetByClassKey('bluechip_crypto');
             const goldPrimary = await assetRegistry.getPrimaryAssetByClassKey('tokenized_gold');
 
             const chainNetwork = getCurrentNetwork();
@@ -106,17 +107,19 @@ class DashboardController extends Controller {
                 }
             };
 
-            const [onchainUsdc, onchainUsdm, onchainIvvon, onchainPaxg] = wallet?.address
+            const [onchainUsdc, onchainUsdm, onchainUsde, onchainWeth, onchainPaxg] = wallet?.address
                 ? await Promise.all([
                     getOnchainBalance('USDC'),
                     getOnchainBalance('USDM'),
-                    getOnchainBalance('IVVON'),
+                    getOnchainBalance('USDE'),
+                    getOnchainBalance('WETH'),
                     getOnchainBalance('PAXG'),
                 ])
-                : [null, null, null, null];
+                : [null, null, null, null, null];
 
             let stableMarket = null;
-            let stocksMarket = null;
+            let defiYieldMarket = null;
+            let cryptoMarket = null;
             let goldMarket = null;
 
             const normalizeSymbol = (symbol?: string | null): AssetSymbol | null => {
@@ -126,14 +129,18 @@ class DashboardController extends Controller {
 
             try {
                 const stableSymbol = normalizeSymbol(stablePrimary?.symbol);
-                const stocksSymbol = normalizeSymbol(stocksPrimary?.symbol);
+                const defiYieldSymbol = normalizeSymbol(defiYieldPrimary?.symbol);
+                const cryptoSymbol = normalizeSymbol(cryptoPrimary?.symbol);
                 const goldSymbol = normalizeSymbol(goldPrimary?.symbol);
 
                 stableMarket = stableSymbol
                     ? await marketDataRepo.getAssetData(stableSymbol)
                     : null;
-                stocksMarket = stocksSymbol
-                    ? await marketDataRepo.getAssetData(stocksSymbol)
+                defiYieldMarket = defiYieldSymbol
+                    ? await marketDataRepo.getAssetData(defiYieldSymbol)
+                    : null;
+                cryptoMarket = cryptoSymbol
+                    ? await marketDataRepo.getAssetData(cryptoSymbol)
                     : null;
                 goldMarket = goldSymbol
                     ? await marketDataRepo.getAssetData(goldSymbol)
@@ -141,7 +148,7 @@ class DashboardController extends Controller {
             } catch (error) {
                 // Gracefully degrade if market data isn't available yet
                 stableMarket = null;
-                stocksMarket = null;
+                cryptoMarket = null;
                 goldMarket = null;
             }
 
@@ -151,19 +158,22 @@ class DashboardController extends Controller {
             };
 
             const stableBalance = onchainUsdm ?? (wallet?.stableYieldBalance ?? 0);
-            const stocksBalance = onchainIvvon ?? (wallet?.tokenizedStocksBalance ?? 0);
+            const defiYieldBalance = onchainUsde ?? (wallet?.defiYieldBalance ?? 0);
+            const cryptoBalance = onchainWeth ?? (wallet?.bluechipCryptoBalance ?? 0);
             const goldBalance = onchainPaxg ?? (wallet?.tokenizedGoldBalance ?? 0);
-            const onchainHoldingsPresent = [stableBalance, stocksBalance, goldBalance].some(amount => amount > 0);
+            const onchainHoldingsPresent = [stableBalance, defiYieldBalance, cryptoBalance, goldBalance].some(amount => amount > 0);
 
             const stablePrice = stableMarket?.price != null ? Number(stableMarket.price) : 1;
-            const stocksPrice = stocksMarket?.price != null ? Number(stocksMarket.price) : 0;
+            const defiYieldPrice = defiYieldMarket?.price != null ? Number(defiYieldMarket.price) : 1;
+            const cryptoPrice = cryptoMarket?.price != null ? Number(cryptoMarket.price) : 0;
             const goldPrice = goldMarket?.price != null ? Number(goldMarket.price) : 0;
 
             const stableValueUsd = stableBalance * stablePrice;
-            const stocksValueUsd = stocksBalance * stocksPrice;
+            const defiYieldValueUsd = defiYieldBalance * defiYieldPrice;
+            const cryptoValueUsd = cryptoBalance * cryptoPrice;
             const goldValueUsd = goldBalance * goldPrice;
 
-            const onchainTotalValueUsd = stableValueUsd + stocksValueUsd + goldValueUsd;
+            const onchainTotalValueUsd = stableValueUsd + defiYieldValueUsd + cryptoValueUsd + goldValueUsd;
             const portfolioTotalValueUsd = onchainHoldingsPresent ? onchainTotalValueUsd : 0;
             const monthlyChangePercent = portfolioTotalValueUsd > 0
                 ? (monthlyChange / portfolioTotalValueUsd) * 100
@@ -188,23 +198,39 @@ class DashboardController extends Controller {
                     changePercent: stableMarket?.changePercent24h != null ? Number(stableMarket.changePercent24h) : undefined,
                 },
                 {
-                    classKey: 'tokenized_stocks',
-                    name: 'Tokenized Stocks',
-                    primaryAssetSymbol: stocksPrimary?.symbol || null,
-                    valueUsd: onchainHoldingsPresent ? stocksValueUsd : 0,
+                    classKey: 'defi_yield',
+                    name: 'DeFi Yield',
+                    primaryAssetSymbol: defiYieldPrimary?.symbol || null,
+                    valueUsd: onchainHoldingsPresent ? defiYieldValueUsd : 0,
                     percentage: onchainHoldingsPresent && portfolioTotalValueUsd > 0
-                        ? (stocksValueUsd / portfolioTotalValueUsd) * 100
+                        ? (defiYieldValueUsd / portfolioTotalValueUsd) * 100
                         : 0,
                     monthlyEarnings: getMonthlyEarnings(
-                        onchainHoldingsPresent ? stocksValueUsd : 0,
-                        undefined,
-                        stocksMarket?.currentApy != null ? Number(stocksMarket.currentApy) : undefined
+                        onchainHoldingsPresent ? defiYieldValueUsd : 0,
+                        defiYieldMarket?.currentApy != null ? Number(defiYieldMarket.currentApy) : undefined
                     ),
-                    avgReturn: stocksMarket?.currentApy != null ? Number(stocksMarket.currentApy) : undefined,
-                    requiresTier2: true,
-                    price: stocksMarket?.price != null ? Number(stocksMarket.price) : undefined,
-                    change: stocksMarket?.change24h != null ? Number(stocksMarket.change24h) : undefined,
-                    changePercent: stocksMarket?.changePercent24h != null ? Number(stocksMarket.changePercent24h) : undefined,
+                    apy: defiYieldMarket?.currentApy != null ? Number(defiYieldMarket.currentApy) : undefined,
+                    price: defiYieldMarket?.price != null ? Number(defiYieldMarket.price) : undefined,
+                    change: defiYieldMarket?.change24h != null ? Number(defiYieldMarket.change24h) : undefined,
+                    changePercent: defiYieldMarket?.changePercent24h != null ? Number(defiYieldMarket.changePercent24h) : undefined,
+                },
+                {
+                    classKey: 'bluechip_crypto',
+                    name: 'Blue Chip Crypto',
+                    primaryAssetSymbol: cryptoPrimary?.symbol || null,
+                    valueUsd: onchainHoldingsPresent ? cryptoValueUsd : 0,
+                    percentage: onchainHoldingsPresent && portfolioTotalValueUsd > 0
+                        ? (cryptoValueUsd / portfolioTotalValueUsd) * 100
+                        : 0,
+                    monthlyEarnings: getMonthlyEarnings(
+                        onchainHoldingsPresent ? cryptoValueUsd : 0,
+                        undefined,
+                        cryptoMarket?.currentApy != null ? Number(cryptoMarket.currentApy) : undefined
+                    ),
+                    avgReturn: cryptoMarket?.currentApy != null ? Number(cryptoMarket.currentApy) : undefined,
+                    price: cryptoMarket?.price != null ? Number(cryptoMarket.price) : undefined,
+                    change: cryptoMarket?.change24h != null ? Number(cryptoMarket.change24h) : undefined,
+                    changePercent: cryptoMarket?.changePercent24h != null ? Number(cryptoMarket.changePercent24h) : undefined,
                 },
                 {
                     classKey: 'tokenized_gold',
@@ -233,12 +259,19 @@ class DashboardController extends Controller {
                     change: stableMarket?.change24h != null ? Number(stableMarket.change24h) : 0,
                     changePercent: stableMarket?.changePercent24h != null ? Number(stableMarket.changePercent24h) : 0,
                 } : null,
-                stocksPrimary?.symbol ? {
-                    symbol: stocksPrimary.symbol,
-                    name: stocksPrimary.name,
-                    price: stocksMarket?.price != null ? Number(stocksMarket.price) : 0,
-                    change: stocksMarket?.change24h != null ? Number(stocksMarket.change24h) : 0,
-                    changePercent: stocksMarket?.changePercent24h != null ? Number(stocksMarket.changePercent24h) : 0,
+                defiYieldPrimary?.symbol ? {
+                    symbol: defiYieldPrimary.symbol,
+                    name: defiYieldPrimary.name,
+                    price: defiYieldMarket?.price != null ? Number(defiYieldMarket.price) : 1,
+                    change: defiYieldMarket?.change24h != null ? Number(defiYieldMarket.change24h) : 0,
+                    changePercent: defiYieldMarket?.changePercent24h != null ? Number(defiYieldMarket.changePercent24h) : 0,
+                } : null,
+                cryptoPrimary?.symbol ? {
+                    symbol: cryptoPrimary.symbol,
+                    name: cryptoPrimary.name,
+                    price: cryptoMarket?.price != null ? Number(cryptoMarket.price) : 0,
+                    change: cryptoMarket?.change24h != null ? Number(cryptoMarket.change24h) : 0,
+                    changePercent: cryptoMarket?.changePercent24h != null ? Number(cryptoMarket.changePercent24h) : 0,
                 } : null,
                 goldPrimary?.symbol ? {
                     symbol: goldPrimary.symbol,
@@ -281,7 +314,8 @@ class DashboardController extends Controller {
                 wallet: {
                     usdcBalance: onchainUsdc ?? (wallet?.usdcBalance ?? 0),
                     stableYieldBalance: stableBalance,
-                    tokenizedStocksBalance: stocksBalance,
+                    defiYieldBalance: defiYieldBalance,
+                    bluechipCryptoBalance: cryptoBalance,
                     tokenizedGoldBalance: goldBalance,
                 },
                 portfolio: {
@@ -430,7 +464,7 @@ class DashboardController extends Controller {
      */
     private static needsRebalance(portfolio: any, user: any): boolean {
         const drift = Math.abs(portfolio.stableYieldsPercent - user.targetStableYieldsPercent) +
-                     Math.abs(portfolio.tokenizedStocksPercent - user.targetTokenizedStocksPercent) +
+                     Math.abs(portfolio.bluechipCryptoPercent - user.targetBluechipCryptoPercent) +
                      Math.abs(portfolio.tokenizedGoldPercent - user.targetTokenizedGoldPercent);
 
         return drift > 5;

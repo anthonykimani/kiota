@@ -17,6 +17,7 @@ export interface Wallet {
   provider: string
   usdcBalance?: number
   stableYieldBalance?: number
+  defiYieldBalance?: number
   tokenizedStocksBalance?: number
   tokenizedGoldBalance?: number
 }
@@ -29,6 +30,7 @@ export interface Portfolio {
 // Strategy/Quiz types
 export interface StrategyAllocation {
   stableYields: number
+  defiYield: number
   tokenizedStocks: number
   tokenizedGold: number
 }
@@ -41,6 +43,7 @@ export interface Strategy {
   riskLevel: string
   assets: {
     stableYields: string
+    defiYield: string
     tokenizedStocks: string
     tokenizedGold: string
   }
@@ -120,6 +123,7 @@ export interface Dashboard {
   wallet?: {
     usdcBalance: number
     stableYieldBalance: number
+    defiYieldBalance: number
     tokenizedStocksBalance: number
     tokenizedGoldBalance: number
   }
@@ -285,6 +289,7 @@ export interface DepositReviewResponse {
   amountUsd: number
   allocation: {
     stableYields: number
+    defiYield: number
     tokenizedStocks: number
     tokenizedGold: number
   }

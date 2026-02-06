@@ -42,16 +42,26 @@ export const positiveNumberSchema = z
   .positive('Amount must be positive');
 
 /**
- * Allocation schema (must add up to 100%)
+ * Allocation schema (must add up to 100%, min 10% stable)
+ *
+ * Asset classes:
+ * - stableYields (USDM): min 10%
+ * - tokenizedGold (PAXG): 0-100%
+ * - defiYield (USDE): 0-100%
+ * - bluechipCrypto (WETH): 0-100%
  */
 export const allocationSchema = z.object({
-  stableYields: z.number().min(0).max(100),
-  tokenizedStocks: z.number().min(0).max(100),
+  stableYields: z.number().min(10, 'Minimum 10% stable yields required').max(100),
   tokenizedGold: z.number().min(0).max(100),
-  blueChipCrypto: z.number().min(0).max(100).optional().default(0),
+  defiYield: z.number().min(0).max(100),
+  bluechipCrypto: z.number().min(0).max(100),
 }).refine(
   (data) => {
-    const total = data.stableYields + data.tokenizedStocks + data.tokenizedGold + (data.blueChipCrypto || 0);
+    const total =
+      data.stableYields +
+      data.tokenizedGold +
+      data.defiYield +
+      data.bluechipCrypto;
     return Math.abs(total - 100) < 0.01; // Allow 0.01% rounding error
   },
   {

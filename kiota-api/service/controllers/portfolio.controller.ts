@@ -83,13 +83,20 @@ class PortfolioController extends Controller {
                     apy: 5.0,
                 },
                 {
-                    classKey: 'tokenized_stocks',
-                    name: 'Tokenized Stocks',
-                    valueUsd: portfolio.tokenizedStocksValueUsd,
-                    percentage: portfolio.tokenizedStocksPercent,
-                    targetPercentage: user.targetTokenizedStocksPercent,
-                    avgReturn: 10.2,
-                    requiresTier2: true,
+                    classKey: 'defi_yield',
+                    name: 'DeFi Yield',
+                    valueUsd: portfolio.defiYieldValueUsd,
+                    percentage: portfolio.defiYieldPercent,
+                    targetPercentage: user.targetDefiYieldPercent,
+                    apy: 6.0,
+                },
+                {
+                    classKey: 'bluechip_crypto',
+                    name: 'Blue Chip Crypto',
+                    valueUsd: portfolio.bluechipCryptoValueUsd,
+                    percentage: portfolio.bluechipCryptoPercent,
+                    targetPercentage: user.targetBluechipCryptoPercent,
+                    avgReturn: 15.0,
                 },
                 {
                     classKey: 'tokenized_gold',
@@ -308,20 +315,23 @@ class PortfolioController extends Controller {
             // Prepare data for rebalance calculation
             const currentAllocation = {
                 stableYields: Number(portfolio.stableYieldsPercent),
-                tokenizedStocks: Number(portfolio.tokenizedStocksPercent),
+                defiYield: Number(portfolio.defiYieldPercent),
                 tokenizedGold: Number(portfolio.tokenizedGoldPercent),
+                bluechipCrypto: Number(portfolio.bluechipCryptoPercent),
             };
 
             const targetAllocation = {
                 stableYields: Number(user.targetStableYieldsPercent),
-                tokenizedStocks: Number(user.targetTokenizedStocksPercent),
+                defiYield: Number(user.targetDefiYieldPercent),
                 tokenizedGold: Number(user.targetTokenizedGoldPercent),
+                bluechipCrypto: Number(user.targetBluechipCryptoPercent),
             };
 
             const currentBalances = {
                 stableYields: Number(wallet.stableYieldBalance) || 0,
-                tokenizedStocks: Number(wallet.tokenizedStocksBalance) || 0,
+                defiYield: Number(wallet.defiYieldBalance) || 0,
                 tokenizedGold: Number(wallet.tokenizedGoldBalance) || 0,
+                bluechipCrypto: Number(wallet.bluechipCryptoBalance) || 0,
             };
 
             const totalValueUsd = Number(portfolio.totalValueUsd);
@@ -516,10 +526,11 @@ class PortfolioController extends Controller {
      */
     private static checkRebalanceNeeded(portfolio: any, user: any): boolean {
         const stableYieldDrift = Math.abs(portfolio.stableYieldsPercent - user.targetStableYieldsPercent);
-        const stocksDrift = Math.abs(portfolio.tokenizedStocksPercent - user.targetTokenizedStocksPercent);
+        const defiYieldDrift = Math.abs(portfolio.defiYieldPercent - user.targetDefiYieldPercent);
+        const cryptoDrift = Math.abs(portfolio.bluechipCryptoPercent - user.targetBluechipCryptoPercent);
         const goldDrift = Math.abs(portfolio.tokenizedGoldPercent - user.targetTokenizedGoldPercent);
 
-        const totalDrift = stableYieldDrift + stocksDrift + goldDrift;
+        const totalDrift = stableYieldDrift + defiYieldDrift + cryptoDrift + goldDrift;
 
         return totalDrift > 5;
     }
