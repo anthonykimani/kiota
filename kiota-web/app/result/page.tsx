@@ -7,11 +7,13 @@ import { InfoCard } from "@/components/custom/info-card"
 import { LegendItem } from "@/components/custom/legend-item"
 import { ScreenWrapper } from "@/components/custom/screen-wrapper"
 import { ChartPieDonutText } from "@/components/custom/chart-pie-donut"
-import { defaultPortfolioData, resultOverviewData, getAssetClassLabel, type PortfolioItem } from "@/lib/portfolio"
+import { getAssetClassLabel, type PortfolioItem } from "@/lib/portfolio"
 import { assetClassConfig } from "@/lib/constants"
 import { useQuiz } from "@/hooks/use-quiz"
 import { useAuth } from "@/context/auth-context"
+import { quizApi } from "@/lib/api/client"
 import type { Strategy } from "@/lib/api/types"
+import { ShieldSvg, DataSvg, CrownSvg } from "@/lib/svg"
 
 export default function ResultPage() {
   const router = useRouter()
@@ -19,9 +21,47 @@ export default function ResultPage() {
   const { acceptStrategy, isAccepting } = useQuiz()
   const [strategy, setStrategy] = useState<Strategy | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
-  const [portfolioData, setPortfolioData] = useState<PortfolioItem[]>(defaultPortfolioData)
+  const [portfolioData, setPortfolioData] = useState<PortfolioItem[]>([])
 
-  // Load strategy from localStorage on mount
+  const applyStrategy = (nextStrategy: Strategy) => {
+    setStrategy(nextStrategy)
+
+    if (nextStrategy?.allocation) {
+      const { stableYields, defiYield, tokenizedStocks, tokenizedGold } = nextStrategy.allocation
+      setPortfolioData([
+        {
+          assetClass: "preservation",
+          value: stableYields,
+          color: assetClassConfig.preservation.color,
+          asset: nextStrategy.assets?.stableYields || "USDM",
+          description: "Dollar-backed | yield-focused | Low risk",
+        },
+        {
+          assetClass: "yield",
+          value: defiYield,
+          color: assetClassConfig.yield.color,
+          asset: nextStrategy.assets?.defiYield || "USDE",
+          description: "On-chain yield | variable returns",
+        },
+        {
+          assetClass: "growth",
+          value: tokenizedStocks,
+          color: assetClassConfig.growth.color,
+          asset: nextStrategy.assets?.tokenizedStocks || "bCSPX",
+          description: "Equities exposure | growth focused",
+        },
+        {
+          assetClass: "hedge",
+          value: tokenizedGold,
+          color: assetClassConfig.hedge.color,
+          asset: nextStrategy.assets?.tokenizedGold || "PAXG",
+          description: "Hedge allocation | stability focused",
+        },
+      ])
+    }
+  }
+
+  // Load strategy from localStorage or latest session
   useEffect(() => {
     const storedStrategy = localStorage.getItem("quiz-strategy")
     const storedSessionId = localStorage.getItem("quiz-session-id")
@@ -29,34 +69,8 @@ export default function ResultPage() {
     if (storedStrategy) {
       try {
         const parsed = JSON.parse(storedStrategy)
-        setStrategy(parsed.strategy)
-        
-        // Convert API allocation to portfolio data format
-        if (parsed.strategy?.allocation) {
-          const { stableYields, tokenizedStocks, tokenizedGold } = parsed.strategy.allocation
-          setPortfolioData([
-            {
-              assetClass: "preservation",
-              value: stableYields,
-              color: assetClassConfig.preservation.color,
-              asset: parsed.strategy.assets?.stableYields || "USDM",
-              description: "Dollar-backed | 5% yield | Low risk",
-            },
-            {
-              assetClass: "growth",
-              value: tokenizedStocks,
-              color: assetClassConfig.growth.color,
-              asset: parsed.strategy.assets?.tokenizedStocks || "bCSPX",
-              description: "S&P 500 | ~10% avg return | Med risk",
-            },
-            {
-              assetClass: "hedge",
-              value: tokenizedGold,
-              color: assetClassConfig.hedge.color,
-              asset: parsed.strategy.assets?.tokenizedGold || "PAXG",
-              description: "Gold-backed | Inflation hedge | Stable",
-            },
-          ])
+        if (parsed?.strategy) {
+          applyStrategy(parsed.strategy)
         }
       } catch (e) {
         console.error("Failed to parse strategy:", e)
@@ -66,7 +80,32 @@ export default function ResultPage() {
     if (storedSessionId) {
       setSessionId(storedSessionId)
     }
-  }, [])
+
+    if (!storedStrategy && isAuthenticated) {
+      quizApi.getLatestSession().then((response) => {
+        const session = response.data?.session
+        if (!session?.aiResponse) return
+
+        const ai = session.aiResponse as any
+        if (ai?.allocation && ai?.strategyName) {
+          const nextStrategy: Strategy = {
+            name: ai.strategyName,
+            allocation: ai.allocation,
+            rationale: ai.rationale || "",
+            expectedReturn: ai.expectedReturn || 0,
+            riskLevel: ai.riskLevel || "",
+            assets: ai.defaultAssets || {
+              stableYields: "USDM",
+              defiYield: "USDE",
+              tokenizedStocks: "bCSPX",
+              tokenizedGold: "PAXG",
+            },
+          }
+          applyStrategy(nextStrategy)
+        }
+      }).catch(() => null)
+    }
+  }, [isAuthenticated])
 
   const handleContinue = async () => {
     // Accept strategy if we have a session
@@ -91,6 +130,33 @@ export default function ResultPage() {
     router.push("/quiz")
   }
 
+  const overviewItems = strategy ? [
+    {
+      icon: ShieldSvg,
+      title: `${strategy.assets?.stableYields || 'USDM'} • ${strategy.allocation.stableYields}%`,
+      titleColor: assetClassConfig.preservation.textColor,
+      description: `Stable allocation for capital preservation.`,
+    },
+    {
+      icon: DataSvg,
+      title: `${strategy.assets?.defiYield || 'USDE'} • ${strategy.allocation.defiYield}%`,
+      titleColor: assetClassConfig.yield.textColor,
+      description: `On-chain yield allocation with variable returns.`,
+    },
+    {
+      icon: CrownSvg,
+      title: `${strategy.assets?.tokenizedStocks || 'bCSPX'} • ${strategy.allocation.tokenizedStocks}%`,
+      titleColor: assetClassConfig.growth.textColor,
+      description: `Growth allocation aligned to your risk level.`,
+    },
+    {
+      icon: ShieldSvg,
+      title: `${strategy.assets?.tokenizedGold || 'PAXG'} • ${strategy.allocation.tokenizedGold}%`,
+      titleColor: assetClassConfig.hedge.textColor,
+      description: `Hedge allocation for downside protection.`,
+    },
+  ] : []
+
   return (
     <ScreenWrapper centered className="gap-6 py-8">
       {/* Header */}
@@ -104,7 +170,7 @@ export default function ResultPage() {
       </div>
 
       {/* Chart */}
-      <ChartPieDonutText data={portfolioData} />
+        <ChartPieDonutText data={portfolioData} />
 
       {/* Legend */}
       <div className="flex flex-col gap-2 bg-kiota-card p-4 rounded-lg w-full">
@@ -130,15 +196,21 @@ export default function ResultPage() {
       <h2 className="text-lg font-bold">Why This works for you:</h2>
 
       <div className="flex flex-col gap-3 w-full">
-        {resultOverviewData.map((item, index) => (
-          <InfoCard
-            key={index}
-            icon={item.icon}
-            title={item.title}
-            titleColor={item.titleColor}
-            description={item.description}
-          />
-        ))}
+        {overviewItems.length > 0 ? (
+          overviewItems.map((item, index) => (
+            <InfoCard
+              key={index}
+              icon={item.icon}
+              title={item.title}
+              titleColor={item.titleColor}
+              description={item.description}
+            />
+          ))
+        ) : (
+          <div className="text-center text-sm text-kiota-text-secondary">
+            Complete the quiz to generate your strategy.
+          </div>
+        )}
       </div>
 
       {/* Expected returns if available */}

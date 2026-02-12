@@ -1,395 +1,385 @@
 import { Request, Response } from 'express';
 import { UserRepository } from '../repositories/user.repo';
 import { AIAdvisorSessionRepository } from '../repositories/advisor-session.repo';
-import Anthropic from '@anthropic-ai/sdk';
-import OpenAI from "openai";
-import z from "zod";
+import z from 'zod';
 import Controller from './controller';
 import { AuthenticatedRequest } from '../interfaces/IAuth';
+import {
+  calculateStrategy,
+  QuizAnswers,
+  applyAllocationConstraints,
+  calculateExpectedReturn,
+  Allocation,
+} from '../services/risk-scoring.service';
+import { createLogger } from '../utils/logger.util';
 
-const StrategySchema = z.object({
-    allocation: z.object({
-        stableYields: z.number(),
-        tokenizedStocks: z.number(),
-        tokenizedGold: z.number(),
-    }),
-    strategyName: z.string(),
-    defaultAssets: z.object({
-        stableYields: z.string(),
-        tokenizedStocks: z.string(),
-        tokenizedGold: z.string(),
-    }),
-    rationale: z.string(),
-    expectedReturn: z.number(),
-    riskLevel: z.string(),
+const logger = createLogger('quiz-controller');
+
+/**
+ * Zod schema for quiz answers validation
+ */
+const QuizAnswersSchema = z.object({
+  age: z.enum(['18-25', '26-35', '36-45', '46-55', '56+']),
+  timeline: z.enum(['10+', '5-10', '3-5', '1-3', '<1']),
+  emergencyFund: z.enum(['6+', '3-6', '<3']),
+  marketDrop: z.enum(['buy', 'hold', 'sell-some', 'sell-all']),
+  volatility: z.enum(['high', 'moderate', 'low']),
+  cryptoComfort: z.enum(['yes', 'small', 'none']),
+});
+
+/**
+ * Zod schema for custom allocation
+ */
+const CustomAllocationSchema = z.object({
+  stableYields: z.number().min(10).max(100),
+  tokenizedGold: z.number().min(0).max(100),
+  defiYield: z.number().min(0).max(100),
+  bluechipCrypto: z.number().min(0).max(100),
 });
 
 
 /**
  * Quiz Controller
- * Handles investment strategy quiz for Phase 1 MVP
- * Screens: 5 (Investment Strategy Quiz), 6 (AI Strategy Result)
+ *
+ * Handles the robo-advisor quiz flow with deterministic scoring.
+ *
+ * Flow:
+ * 1. User answers 6 questions about risk capacity and tolerance
+ * 2. System calculates risk score (0-55) and maps to profile
+ * 3. Profile determines recommended asset allocation
+ * 4. User can accept or customize allocation
+ *
+ * Asset Classes:
+ * - Stable Yields (USDM): Capital preservation
+ * - Tokenized Gold (PAXG): Inflation hedge
+ * - DeFi Yield (USDE): Variable yield
+ * - Blue Chip Crypto (WETH): Growth exposure
  */
 class QuizController extends Controller {
-    /**
-     * Submit quiz answers and generate AI strategy (Screen 5)
-     * @param req Express Request
-     * @param res Express Response
-     * @returns Json Object
-     */
-    public static async submitQuiz(req: Request, res: Response) {
-        try {
-            const userRepo: UserRepository = new UserRepository();
-            const aiSessionRepo: AIAdvisorSessionRepository = new AIAdvisorSessionRepository();
+  /**
+   * Submit quiz answers and generate strategy (deterministic scoring)
+   *
+   * POST /api/quiz/submit
+   *
+   * Body:
+   * {
+   *   age: '18-25' | '26-35' | '36-45' | '46-55' | '56+',
+   *   timeline: '10+' | '5-10' | '3-5' | '1-3' | '<1',
+   *   emergencyFund: '6+' | '3-6' | '<3',
+   *   marketDrop: 'buy' | 'hold' | 'sell-some' | 'sell-all',
+   *   volatility: 'high' | 'moderate' | 'low',
+   *   cryptoComfort: 'yes' | 'small' | 'none'
+   * }
+   */
+  public static async submitQuiz(req: Request, res: Response) {
+    try {
+      const userRepo: UserRepository = new UserRepository();
+      const aiSessionRepo: AIAdvisorSessionRepository = new AIAdvisorSessionRepository();
 
-            // Comes from requireInternalAuth middleware
-            const userId = (req as AuthenticatedRequest).userId;
+      const userId = (req as AuthenticatedRequest).userId;
 
-            if (!userId) {
-                return res.send(super.response(super._401, null, ['Not authenticated']));
-            }
+      if (!userId) {
+        return res.send(super.response(super._401, null, ['Not authenticated']));
+      }
 
-            /**
-             * Support BOTH payload styles:
-             *  A) { answers: { primaryGoal, investmentTimeline, ... } }
-             *  B) { goal, timeline, riskTolerance, ... }  (legacy)
-             */
-            const a = (req.body?.answers && typeof req.body.answers === 'object')
-                ? req.body.answers
-                : req.body;
+      // Support both { answers: {...} } and flat body
+      const rawAnswers = req.body?.answers ?? req.body;
 
-            // Normalize field names
-            const goal = a.primaryGoal ?? a.goal;
-            const timeline = a.investmentTimeline ?? a.timeline;
-            const riskTolerance = a.riskTolerance;
-            const investmentExperience = a.investmentExperience;
+      // Validate quiz answers
+      const parseResult = QuizAnswersSchema.safeParse(rawAnswers);
+      if (!parseResult.success) {
+        logger.warn('Invalid quiz answers', {
+          userId,
+          errors: parseResult.error.issues,
+        });
+        return res.send(
+          super.response(super._400, null, [
+            'Invalid quiz answers. All 6 questions must be answered.',
+            ...parseResult.error.issues.map((e: z.ZodIssue) => `${e.path.join('.')}: ${e.message}`),
+          ])
+        );
+      }
 
-            const currentSavings = a.currentSavingsRange ?? a.currentSavings;
-            const monthlySavings = a.monthlySavingsRange ?? a.monthlySavings;
+      const answers: QuizAnswers = parseResult.data;
 
-            const comfortableWithDollars =
-                typeof a.comfortableWithDollars === 'boolean' ? a.comfortableWithDollars : true;
+      logger.info('Processing quiz submission', { userId, answers });
 
-            const priorities = Array.isArray(a.investmentPriorities)
-                ? a.investmentPriorities
-                : Array.isArray(a.priorities)
-                    ? a.priorities
-                    : [];
+      // Calculate strategy using deterministic scoring
+      const strategy = calculateStrategy(answers);
 
-            // Validate required quiz fields
-            if (!goal || !timeline || !riskTolerance || !investmentExperience) {
-                return res.send(
-                    super.response(
-                        super._400,
-                        null,
-                        ['All quiz questions must be answered']
-                    )
-                );
-            }
+      // Save quiz answers to user profile
+      await userRepo.saveQuizAnswers(userId, {
+        primaryGoal: 'wealth_growth', // Default goal for new quiz format
+        investmentTimeline: answers.timeline,
+        riskTolerance: answers.volatility,
+        investmentExperience: 'intermediate', // Derived from quiz implicitly
+        currentSavingsRange: undefined,
+        monthlySavingsRange: undefined,
+        comfortableWithDollars: true,
+        investmentPriorities: [],
+      });
 
-            // Save quiz answers (DB)
-            await userRepo.saveQuizAnswers(userId, {
-                primaryGoal: goal,
-                investmentTimeline: timeline,
-                riskTolerance,
-                investmentExperience,
-                currentSavingsRange: currentSavings,
-                monthlySavingsRange: monthlySavings,
-                comfortableWithDollars,
-                investmentPriorities: priorities
-            });
+      // Create session for audit trail
+      const aiSession = await aiSessionRepo.createQuizSession(userId, {
+        // Store raw answers for reference
+        age: answers.age,
+        timeline: answers.timeline,
+        emergencyFund: answers.emergencyFund,
+        marketDrop: answers.marketDrop,
+        volatility: answers.volatility,
+        cryptoComfort: answers.cryptoComfort,
+      });
 
-            // Create AI session (DB)
-            const aiSession = await aiSessionRepo.createQuizSession(userId, {
-                goal,
-                timeline,
-                riskTolerance,
-                investmentExperience,
-                currentSavings,
-                monthlySavings,
-                comfortableWithDollars,
-                priorities
-            });
-
-            // Generate strategy (Claude/OpenAI depending on your implementation)
-            const strategy = await QuizController.generateStrategy({
-                goal,
-                timeline,
-                riskTolerance,
-                investmentExperience,
-                currentSavings,
-                monthlySavings,
-                comfortableWithDollars,
-                priorities
-            });
-
-            // Save AI response (DB)
-            await aiSessionRepo.saveStrategyResponse(
-                aiSession.id,
-                {
-                    allocation: strategy.allocation,
-                    strategyName: strategy.strategyName,
-                    rationale: strategy.rationale,
-                    expectedReturn: strategy.expectedReturn,
-                    riskLevel: strategy.riskLevel
-                },
-                {
-                    modelUsed: strategy.modelUsed ?? 'unknown',
-                    inputTokens: strategy.usage?.input_tokens ?? strategy.usage?.inputTokens,
-                    outputTokens: strategy.usage?.output_tokens ?? strategy.usage?.outputTokens,
-                    latencyMs: strategy.latencyMs
-                }
-            );
-
-            // Save strategy targets to user (DB)
-            await userRepo.saveStrategy(userId, {
-                targetStableYieldsPercent: strategy.allocation.stableYields,
-                targetTokenizedStocksPercent: strategy.allocation.tokenizedStocks,
-                targetTokenizedGoldPercent: strategy.allocation.tokenizedGold,
-                strategyName: strategy.strategyName
-            });
-
-            const quizData = {
-                sessionId: aiSession.id,
-                strategy: {
-                    name: strategy.strategyName,
-                    allocation: strategy.allocation,
-                    rationale: strategy.rationale,
-                    expectedReturn: strategy.expectedReturn,
-                    riskLevel: strategy.riskLevel,
-                    assets: strategy.defaultAssets
-                }
-            };
-
-            return res.send(super.response(super._200, quizData));
-        } catch (error) {
-            return res.send(super.response(super._500, null, super.ex(error)));
+      // Save strategy response (no AI, but keep structure for compatibility)
+      await aiSessionRepo.saveStrategyResponse(
+        aiSession.id,
+        {
+          allocation: strategy.allocation,
+          strategyName: strategy.profileName,
+          rationale: strategy.rationale,
+          expectedReturn: strategy.expectedReturn,
+          riskLevel: strategy.riskLevel,
+        },
+        {
+          modelUsed: 'deterministic-scoring-v1',
+          inputTokens: 0,
+          outputTokens: 0,
+          latencyMs: 0,
         }
+      );
+
+      // Save strategy targets to user
+      await userRepo.saveStrategy(userId, {
+        targetStableYieldsPercent: strategy.allocation.stableYields,
+        targetTokenizedGoldPercent: strategy.allocation.tokenizedGold,
+        targetDefiYieldPercent: strategy.allocation.defiYield,
+        targetBluechipCryptoPercent: strategy.allocation.bluechipCrypto,
+        strategyName: strategy.profileKey,
+        riskScore: strategy.score,
+      });
+
+      const responseData = {
+        sessionId: aiSession.id,
+        score: strategy.score,
+        maxScore: strategy.maxScore,
+        strategy: {
+          name: strategy.profileName,
+          key: strategy.profileKey,
+          allocation: strategy.allocation,
+          rationale: strategy.rationale,
+          expectedReturn: strategy.expectedReturn,
+          riskLevel: strategy.riskLevel,
+          assets: strategy.defaultAssets,
+        },
+      };
+
+      logger.info('Quiz completed successfully', {
+        userId,
+        score: strategy.score,
+        profile: strategy.profileKey,
+      });
+
+      return res.send(super.response(super._200, responseData));
+    } catch (error) {
+      logger.error('Quiz submission failed', error as Error);
+      return res.send(super.response(super._500, null, super.ex(error)));
     }
+  }
 
 
-    /**
-     * Accept or customize strategy (Screen 6)
-     * @param req Express Request
-     * @param res Express Response
-     * @returns Json Object
-     */
-    public static async acceptStrategy(req: Request, res: Response) {
-        try {
-            const userRepo: UserRepository = new UserRepository();
-            const aiSessionRepo: AIAdvisorSessionRepository = new AIAdvisorSessionRepository();
+  /**
+   * Accept or customize strategy
+   *
+   * POST /api/quiz/accept
+   *
+   * Body:
+   * {
+   *   sessionId: string,
+   *   accepted: boolean,
+   *   customAllocation?: {
+   *     stableYields: number,
+   *     tokenizedGold: number,
+   *     defiYield: number,
+   *     bluechipCrypto: number
+   *   }
+   * }
+   *
+   * Constraints:
+   * - Minimum 10% stable yields
+   * - All allocations must sum to 100%
+   */
+  public static async acceptStrategy(req: Request, res: Response) {
+    try {
+      const userRepo: UserRepository = new UserRepository();
+      const aiSessionRepo: AIAdvisorSessionRepository = new AIAdvisorSessionRepository();
 
-            const userId = (req as AuthenticatedRequest).userId;
-            const { sessionId, accepted, customAllocation } = req.body;
+      const userId = (req as AuthenticatedRequest).userId;
+      const { sessionId, accepted, customAllocation } = req.body;
 
-            if (!sessionId) {
-                return res.send(
-                    super.response(
-                        super._400,
-                        null,
-                        ['Session ID is required']
-                    )
-                );
-            }
+      if (!sessionId) {
+        return res.send(super.response(super._400, null, ['Session ID is required']));
+      }
 
-            // Record user decision
-            await aiSessionRepo.recordUserDecision(sessionId, accepted);
+      // Record user decision
+      await aiSessionRepo.recordUserDecision(sessionId, accepted);
 
-            if (customAllocation) {
-                const total = customAllocation.stableYields +
-                    customAllocation.tokenizedStocks +
-                    customAllocation.tokenizedGold;
-
-                if (Math.abs(total - 100) > 0.01) {
-                    return res.send(
-                        super.response(
-                            super._400,
-                            null,
-                            ['Allocation must add up to 100%']
-                        )
-                    );
-                }
-
-                // Save custom strategy
-                await userRepo.saveStrategy(userId, {
-                    targetStableYieldsPercent: customAllocation.stableYields,
-                    targetTokenizedStocksPercent: customAllocation.tokenizedStocks,
-                    targetTokenizedGoldPercent: customAllocation.tokenizedGold,
-                    strategyName: 'Custom Strategy'
-                });
-            }
-
-            const strategyData = {
-                accepted,
-                nextStep: 'wallet_creation'
-            };
-
-            return res.send(super.response(super._200, strategyData));
-
-        } catch (error) {
-            return res.send(super.response(super._500, null, super.ex(error)));
+      if (customAllocation) {
+        // Validate custom allocation
+        const parseResult = CustomAllocationSchema.safeParse(customAllocation);
+        if (!parseResult.success) {
+          return res.send(
+            super.response(super._400, null, [
+              'Invalid allocation. Stable yields must be at least 10%.',
+              ...parseResult.error.issues.map((e: z.ZodIssue) => `${e.path.join('.')}: ${e.message}`),
+            ])
+          );
         }
-    }
 
-    /**
-     * Get latest quiz session
-     * @param req Express Request
-     * @param res Express Response
-     * @returns Json Object
-     */
-    public static async getLatestSession(req: Request, res: Response) {
-        try {
-            const aiSessionRepo: AIAdvisorSessionRepository = new AIAdvisorSessionRepository();
-            const userId = (req as AuthenticatedRequest).userId;
+        const allocation = parseResult.data;
 
-            // Get latest session
-            const session = await aiSessionRepo.getLatestQuizSession(userId);
+        // Check sum = 100
+        const total =
+          allocation.stableYields +
+          allocation.tokenizedGold +
+          allocation.defiYield +
+          allocation.bluechipCrypto;
 
-            if (!session) {
-                return res.send(
-                    super.response(
-                        super._404,
-                        null,
-                        ['No quiz session found']
-                    )
-                );
-            }
-
-            const sessionData = {
-                session: {
-                    id: session.id,
-                    createdAt: session.createdAt,
-                    aiResponse: session.aiResponse,
-                    userAccepted: session.userAccepted
-                }
-            };
-
-            return res.send(super.response(super._200, sessionData));
-
-        } catch (error) {
-            return res.send(super.response(super._500, null, super.ex(error)));
+        if (Math.abs(total - 100) > 0.01) {
+          return res.send(
+            super.response(super._400, null, [
+              `Allocation must add up to 100%. Current total: ${total}%`,
+            ])
+          );
         }
+
+        // Apply constraints (ensures min 10% stable)
+        const constrainedAllocation = applyAllocationConstraints(allocation as Allocation);
+        const expectedReturn = calculateExpectedReturn(constrainedAllocation);
+
+        // Save custom strategy
+        await userRepo.saveStrategy(userId, {
+          targetStableYieldsPercent: constrainedAllocation.stableYields,
+          targetTokenizedGoldPercent: constrainedAllocation.tokenizedGold,
+          targetDefiYieldPercent: constrainedAllocation.defiYield,
+          targetBluechipCryptoPercent: constrainedAllocation.bluechipCrypto,
+          strategyName: 'custom',
+          // Keep existing risk score
+        });
+
+        logger.info('Custom allocation saved', {
+          userId,
+          allocation: constrainedAllocation,
+          expectedReturn,
+        });
+
+        return res.send(
+          super.response(super._200, {
+            accepted,
+            customized: true,
+            allocation: constrainedAllocation,
+            expectedReturn,
+            nextStep: 'wallet_creation',
+          })
+        );
+      }
+
+      // Mark quiz as completed
+      await userRepo.markQuizCompleted(userId);
+
+      logger.info('Strategy accepted', { userId, sessionId, accepted });
+
+      return res.send(
+        super.response(super._200, {
+          accepted,
+          customized: false,
+          nextStep: 'wallet_creation',
+        })
+      );
+    } catch (error) {
+      logger.error('Accept strategy failed', error as Error);
+      return res.send(super.response(super._500, null, super.ex(error)));
     }
+  }
 
-    /**
-     * Generate investment strategy using Claude AI
-     * @param profile User profile data
-     * @returns Strategy object
-     */
-    private static async generateStrategy(profile: any): Promise<any> {
-        const startTime = Date.now();
+  /**
+   * Get latest quiz session
+   *
+   * GET /api/quiz/session
+   */
+  public static async getLatestSession(req: Request, res: Response) {
+    try {
+      const aiSessionRepo: AIAdvisorSessionRepository = new AIAdvisorSessionRepository();
+      const userRepo: UserRepository = new UserRepository();
+      const userId = (req as AuthenticatedRequest).userId;
 
-        const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      // Get latest session
+      const session = await aiSessionRepo.getLatestQuizSession(userId);
 
-        const prompt = `You are a Kenyan investment advisor. Analyze this user profile and recommend a category allocation.
+      if (!session) {
+        return res.send(super.response(super._404, null, ['No quiz session found']));
+      }
 
-        User Profile:
-        - Goal: ${profile.goal}
-        - Timeline: ${profile.timeline}
-        - Risk tolerance: ${profile.riskTolerance}
-        - Investment experience: ${profile.investmentExperience}
-        - Current savings: ${profile.currentSavings || 'Not specified'}
-        - Monthly savings: ${profile.monthlySavings || 'Not specified'}
-        - Comfortable with dollars: ${profile.comfortableWithDollars ? 'Yes' : 'No'}
-        - Priorities: ${profile.priorities?.join(', ') || 'Not specified'}
+      // Get user's current strategy for score
+      const user = await userRepo.findById(userId);
 
-        Available Asset Classes for Phase 1 MVP:
-        1. Stable Yields - 5.0% APY target, low volatility, USD-backed
-        2. Tokenized Stocks - ~10% avg return, medium volatility, requires Tier 2 & KYC
-        3. Tokenized Gold - Tracks gold price, low volatility, hedge asset
+      const sessionData = {
+        session: {
+          id: session.id,
+          createdAt: session.createdAt,
+          aiResponse: session.aiResponse,
+          userAccepted: session.userAccepted,
+          score: user?.riskScore,
+          maxScore: 55,
+        },
+      };
 
-        If you include defaultAssets, use the current primary tokens as examples:
-        - Stable Yields: USDM
-        - Tokenized Stocks: BCSPX
-        - Tokenized Gold: PAXG
-
-        Return ONLY valid JSON matching the schema. Allocation must sum to 100.`;
-
-        try {
-            const response = await client.responses.create({
-                model: "gpt-4o-mini",
-                input: prompt,
-                // “Structured Outputs” style:
-                text: {
-                    format: {
-                        type: "json_schema",
-                        name: "investment_strategy",
-                        schema: {
-                            type: "object",
-                            additionalProperties: false,
-                            properties: {
-                                allocation: {
-                                    type: "object",
-                                    additionalProperties: false,
-                                    properties: {
-                                        stableYields: { type: "number" },
-                                        tokenizedStocks: { type: "number" },
-                                        tokenizedGold: { type: "number" },
-                                    },
-                                    required: ["stableYields", "tokenizedStocks", "tokenizedGold"],
-                                },
-                                strategyName: { type: "string" },
-                                defaultAssets: {
-                                    type: "object",
-                                    additionalProperties: false,
-                                    properties: {
-                                        stableYields: { type: "string" },
-                                        tokenizedStocks: { type: "string" },
-                                        tokenizedGold: { type: "string" },
-                                    },
-                                    required: ["stableYields", "tokenizedStocks", "tokenizedGold"],
-                                },
-                                rationale: { type: "string" },
-                                expectedReturn: { type: "number" },
-                                riskLevel: { type: "string" },
-                            },
-                            required: ["allocation", "strategyName", "defaultAssets", "rationale", "expectedReturn", "riskLevel"],
-                        },
-                    },
-                },
-            });
-
-            const latencyMs = Date.now() - startTime;
-
-            // Responses API returns JSON text in output_text
-            const jsonText = response.output_text;
-            const parsed = StrategySchema.parse(JSON.parse(jsonText));
-
-            // attach basic usage if present
-            return {
-                ...parsed,
-                usage: response.usage,
-                latencyMs,
-            };
-        } catch (err) {
-            console.error("OpenAI strategy error:", err);
-            return QuizController.getFallbackStrategy();
-        }
+      return res.send(super.response(super._200, sessionData));
+    } catch (error) {
+      logger.error('Get latest session failed', error as Error);
+      return res.send(super.response(super._500, null, super.ex(error)));
     }
+  }
 
-    /**
-     * Fallback strategy if Claude AI fails
-     * @returns Default strategy
-     */
-    private static getFallbackStrategy(): any {
-        return {
-            allocation: {
-                stableYields: 80,
-                tokenizedStocks: 15,
-                tokenizedGold: 5
-            },
-            strategyName: 'Conservative Grower',
-            defaultAssets: {
-                stableYields: 'USDM',
-                tokenizedStocks: 'BCSPX',
-                tokenizedGold: 'PAXG'
-            },
-            rationale: 'A balanced approach focusing on preservation with moderate growth.',
-            expectedReturn: 6.25,
-            riskLevel: 'Low-Medium',
-            latencyMs: 0
-        };
+  /**
+   * Get user's current strategy
+   *
+   * GET /api/quiz/strategy
+   */
+  public static async getCurrentStrategy(req: Request, res: Response) {
+    try {
+      const userRepo: UserRepository = new UserRepository();
+      const userId = (req as AuthenticatedRequest).userId;
+
+      const user = await userRepo.findById(userId);
+
+      if (!user) {
+        return res.send(super.response(super._404, null, ['User not found']));
+      }
+
+      const allocation: Allocation = {
+        stableYields: Number(user.targetStableYieldsPercent) || 40,
+        tokenizedGold: Number(user.targetTokenizedGoldPercent) || 15,
+        defiYield: Number(user.targetDefiYieldPercent) || 30,
+        bluechipCrypto: Number(user.targetBluechipCryptoPercent) || 15,
+      };
+
+      const expectedReturn = calculateExpectedReturn(allocation);
+
+      return res.send(
+        super.response(super._200, {
+          strategyName: user.strategyName || 'balanced',
+          score: user.riskScore,
+          maxScore: 55,
+          allocation,
+          expectedReturn,
+          hasCompletedQuiz: user.hasCompletedQuiz,
+        })
+      );
+    } catch (error) {
+      logger.error('Get current strategy failed', error as Error);
+      return res.send(super.response(super._500, null, super.ex(error)));
     }
+  }
 }
 
 export default QuizController;

@@ -23,33 +23,16 @@ interface ChartPieDonutTextProps {
   data?: PortfolioItem[]
 }
 
-const defaultPortfolioData: PortfolioItem[] = [
-  {
-    assetClass: "preservation",
-    value: 40,
-    color: assetClassConfig.preservation.color,
-    asset: "USDM",
-    description: "Dollar-backed | 5% yield | Low risk",
-  },
-  {
-    assetClass: "growth",
-    value: 35,
-    color: assetClassConfig.growth.color,
-    asset: "bCSPX",
-    description: "S&P 500 | ~10% avg return | Med risk",
-  },
-  {
-    assetClass: "hedge",
-    value: 25,
-    color: assetClassConfig.hedge.color,
-    asset: "PAXG",
-    description: "Gold-backed | Inflation hedge | Stable",
-  },
-]
-
 export function ChartPieDonutText({
-  data = defaultPortfolioData,
+  data = [],
 }: ChartPieDonutTextProps) {
+  if (!data.length) {
+    return (
+      <div className="mx-auto flex h-[250px] w-[250px] items-center justify-center rounded-full border border-kiota-border text-center text-xs text-kiota-text-secondary">
+        No allocation data yet
+      </div>
+    )
+  }
   const chartData = React.useMemo(
     () =>
       data.map((item) => ({

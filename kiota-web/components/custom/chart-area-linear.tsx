@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo } from "react"
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
 
 import {
@@ -43,6 +44,24 @@ export function ChartAreaLinear({ data, hasAssets = false }: ChartAreaLinearProp
     ? data 
     : generateFlatLineData()
 
+  // Calculate dynamic Y-axis domain based on actual data
+  const yDomain = useMemo(() => {
+    if (!hasAssets || !data || data.length === 0) {
+      return [0, 100] as [number, number]
+    }
+
+    const values = data.map(d => Number(d.value) || 0)
+    const min = Math.min(...values)
+    const max = Math.max(...values)
+    
+    // Add 10% padding to top and bottom
+    const padding = (max - min) * 0.1 || max * 0.1 || 10
+    const yMin = Math.max(0, min - padding)
+    const yMax = max + padding
+
+    return [yMin, yMax] as [number, number]
+  }, [hasAssets, data])
+
   return (
     <ChartContainer
       className="h-40 w-[calc(100%+2.5rem)] -mx-5"
@@ -76,16 +95,30 @@ export function ChartAreaLinear({ data, hasAssets = false }: ChartAreaLinearProp
           tickLine={false}
           axisLine={false}
           tickMargin={8}
-          tickFormatter={(value) => typeof value === 'string' ? value.slice(0, 3) : value}
+          interval="preserveStartEnd"
+          tickFormatter={(value) => {
+            if (value == null || value === '') return ''
+            return String(value)
+          }}
         />
         <YAxis 
-          domain={[0, 100]} 
+          domain={yDomain} 
           hide={true}
         />
         {hasAssets && (
           <ChartTooltip
             cursor={false}
-            content={<ChartTooltipContent indicator="dot" hideLabel />}
+            content={
+              <ChartTooltipContent 
+                indicator="dot" 
+                hideLabel 
+                formatter={(value) => {
+                  const num = Number(value)
+                  if (isNaN(num)) return ['$0.00', 'Balance']
+                  return [`$${num.toFixed(2)}`, 'Balance']
+                }}
+              />
+            }
           />
         )}
         <Area

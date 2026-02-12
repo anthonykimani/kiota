@@ -5,6 +5,7 @@ import { Bar, BarChart, XAxis, YAxis } from 'recharts'
 
 interface AllocationData {
     stableYields: number
+    defiYield: number
     tokenizedStocks: number
     tokenizedGold: number
 }
@@ -16,6 +17,7 @@ interface AllocationBarChartProps {
 
 const defaultData: AllocationData = {
     stableYields: 40,
+    defiYield: 10,
     tokenizedStocks: 35,
     tokenizedGold: 25,
 }
@@ -24,6 +26,10 @@ const chartConfig = {
     stableYields: {
         label: "Stable Yields",
         color: "rgba(34, 197, 94, 0.5)",
+    },
+    defiYield: {
+        label: "DeFi Yield",
+        color: "rgba(45, 212, 191, 0.5)",
     },
     tokenizedStocks: {
         label: "Tokenized Stocks",
@@ -66,6 +72,14 @@ export function AllocationBarChart({ data = defaultData, className }: Allocation
                         radius={[4, 0, 0, 4]}
                     />
                     <Bar
+                        dataKey="defiYield"
+                        stackId="a"
+                        fill="var(--color-defiYield)"
+                        stroke="rgba(45, 212, 191, 0.8)"
+                        strokeWidth={1}
+                        radius={0}
+                    />
+                    <Bar
                         dataKey="tokenizedStocks"
                         stackId="a"
                         fill="var(--color-tokenizedStocks)"
@@ -90,6 +104,13 @@ export function AllocationBarChart({ data = defaultData, className }: Allocation
                         <span className="text-xs text-kiota-text-secondary">Stable Yields</span>
                     </div>
                     <span className="text-xs font-medium">{data.stableYields}%</span>
+                </div>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: 'rgba(45, 212, 191, 0.5)', border: '1px solid rgba(45, 212, 191, 0.8)' }} />
+                        <span className="text-xs text-kiota-text-secondary">DeFi Yield</span>
+                    </div>
+                    <span className="text-xs font-medium">{data.defiYield}%</span>
                 </div>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">

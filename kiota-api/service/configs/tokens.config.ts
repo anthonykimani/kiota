@@ -1,16 +1,28 @@
 /**
  * Token Configuration
  *
- * Token addresses for supported networks (Ethereum Mainnet and Sepolia)
+ * Token addresses for supported networks (Ethereum Mainnet)
  *
- * Asset Types:
+ * Portfolio Asset Types:
  * - USDC: Circle USD Coin (deposit currency)
- * - USDM: USD Stablecoin (target for stableYields allocation)
- * - BCSPX: Backed CSP Index Token (target for tokenizedStocks allocation)
- * - PAXG: Paxos Gold Token (target for tokenizedGold allocation)
+ * - USDM: Mountain Protocol USD (stable yields allocation)
+ * - PAXG: Paxos Gold Token (tokenized gold allocation)
+ * - USDE: Ethena USDe (DeFi yield allocation)
+ * - WETH: Wrapped Ether (blue chip crypto allocation)
+ *
+ * Note: IVVON (tokenized stocks) removed - blocked by 0x Gasless API
  */
 
-export type AssetType = 'USDC' | 'USDM' | 'BCSPX' | 'PAXG';
+export type AssetType =
+  | 'USDC'
+  | 'USDT'
+  | 'USDE'
+  | 'PYUSD'
+  | 'USDM'
+  | 'PAXG'
+  | 'XAUT'
+  | 'WETH'
+  | 'WBTC';
 
 export interface TokenInfo {
   symbol: AssetType;
@@ -21,46 +33,39 @@ export interface TokenInfo {
 
 /**
  * Token addresses by network
+ *
+ * IMPORTANT: Only Ethereum mainnet has liquidity for all tokens via 0x Gasless
  */
 export const TOKEN_ADDRESSES: Record<string, Record<AssetType, string>> = {
   /**
-   * Ethereum Mainnet (Chain ID: 1)
+   * Ethereum Mainnet (Chain ID: 1) - PRIMARY NETWORK
+   * All tokens verified to work with 0x Gasless API
    */
-  'ethereum': {
-    USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // Circle USDC on Ethereum
-    USDM: '0x59D9356E565Ab3A36dD77763Fc0d87fEaf85508C', // Mountain Protocol USDM
-    BCSPX: '0x4d49fcf93f415AdF54E9a62ab6e224f6d308D026', // Backed CSP Index Token
+  ethereum: {
+    USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // Circle USDC
+    USDT: '0xdAC17F958D2ee523a2206206994597C13D831ec7', // Tether USD
+    USDE: '0x4c9edd5852cd905f086c759e8383e09bff1e68b3', // Ethena USDe
+    PYUSD: '0x6c3ea9036406852006290770bedfcaba0e23a0e8', // PayPal USD
+    USDM: '0x59D9356E565Ab3A36dD77763Fc0d87fEaf85508C', // Mountain Protocol USD (yield-bearing)
     PAXG: '0x45804880De22913dAFE09f4980848ECE6EcbAf78', // Paxos Gold
+    XAUT: '0x68749665ff8d2d112fa859aa293f07a622782f38', // Tether Gold
+    WETH: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', // Wrapped ETH
+    WBTC: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', // Wrapped BTC
   },
-
-  /**
-   * Ethereum Sepolia Testnet (Chain ID: 11155111)
-   */
-  'ethereum-sepolia': {
-    USDC: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // Circle USDC on Sepolia
-    USDM: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
-    BCSPX: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
-    PAXG: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
-  },
-
-  /**
-   * Alias: 'sepolia' maps to 'ethereum-sepolia'
-   */
-  'sepolia': {
-    USDC: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // Circle USDC on Sepolia
-    USDM: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
-    BCSPX: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
-    PAXG: '0x0000000000000000000000000000000000000000', // TODO: Update with testnet address
-  },
-
   /**
    * Base Mainnet (Chain ID: 8453)
+   * Note: Limited token support on Base
    */
-  'base': {
+  base: {
     USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // Circle USDC on Base
-    USDM: '0x0000000000000000000000000000000000000000', // TODO: USDM not on Base yet
-    BCSPX: '0x0000000000000000000000000000000000000000', // TODO: BCSPX not on Base yet
-    PAXG: '0x0000000000000000000000000000000000000000', // TODO: PAXG not on Base yet
+    USDT: '0x0000000000000000000000000000000000000000', // Not available
+    USDE: '0x0000000000000000000000000000000000000000', // Not available
+    PYUSD: '0x0000000000000000000000000000000000000000', // Not available
+    USDM: '0x0000000000000000000000000000000000000000', // Not available
+    PAXG: '0x0000000000000000000000000000000000000000', // Not available
+    XAUT: '0x0000000000000000000000000000000000000000', // Not available
+    WETH: '0x4200000000000000000000000000000000000006', // Wrapped ETH on Base
+    WBTC: '0x0000000000000000000000000000000000000000', // Not available
   },
 };
 
@@ -72,17 +77,37 @@ export const TOKEN_METADATA: Record<AssetType, { decimals: number; name: string 
     decimals: 6,
     name: 'USD Coin',
   },
+  USDT: {
+    decimals: 6,
+    name: 'Tether USD',
+  },
+  USDE: {
+    decimals: 18,
+    name: 'Ethena USDe',
+  },
+  PYUSD: {
+    decimals: 6,
+    name: 'PayPal USD',
+  },
   USDM: {
     decimals: 18,
-    name: 'USD Mountain',
-  },
-  BCSPX: {
-    decimals: 18,
-    name: 'Backed CSP Index Token',
+    name: 'Mountain Protocol USD',
   },
   PAXG: {
     decimals: 18,
     name: 'Paxos Gold',
+  },
+  XAUT: {
+    decimals: 6,
+    name: 'Tether Gold',
+  },
+  WETH: {
+    decimals: 18,
+    name: 'Wrapped Ether',
+  },
+  WBTC: {
+    decimals: 8,
+    name: 'Wrapped Bitcoin',
   },
 };
 
@@ -98,7 +123,7 @@ export function getTokenAddress(asset: AssetType, network: string): string {
 
   if (address === '0x0000000000000000000000000000000000000000') {
     throw new Error(
-      `Token ${asset} not deployed on ${network} testnet. Please update tokens.config.ts with testnet address.`
+      `Token ${asset} is not available on ${network}. Please update tokens.config.ts with a supported address.`
     );
   }
 
@@ -124,7 +149,7 @@ export function getTokenInfo(asset: AssetType, network: string): TokenInfo {
  * Get all supported assets
  */
 export function getSupportedAssets(): AssetType[] {
-  return ['USDC', 'USDM', 'BCSPX', 'PAXG'];
+  return ['USDC', 'USDT', 'USDE', 'PYUSD', 'USDM', 'PAXG', 'XAUT', 'WETH', 'WBTC'];
 }
 
 /**
@@ -135,13 +160,23 @@ export function isAssetSupported(asset: string): asset is AssetType {
 }
 
 /**
+ * Portfolio category type
+ */
+export type PortfolioCategory =
+  | 'stableYields'
+  | 'tokenizedGold'
+  | 'defiYield'
+  | 'bluechipCrypto';
+
+/**
  * Map portfolio category to primary asset
  */
-export function getCategoryAsset(category: 'stableYields' | 'tokenizedStocks' | 'tokenizedGold'): AssetType {
-  const mapping: Record<string, AssetType> = {
+export function getCategoryAsset(category: PortfolioCategory): AssetType {
+  const mapping: Record<PortfolioCategory, AssetType> = {
     stableYields: 'USDM',
-    tokenizedStocks: 'BCSPX',
     tokenizedGold: 'PAXG',
+    defiYield: 'USDE',
+    bluechipCrypto: 'WETH',
   };
 
   return mapping[category];
@@ -150,15 +185,27 @@ export function getCategoryAsset(category: 'stableYields' | 'tokenizedStocks' | 
 /**
  * Map asset to portfolio category
  */
-export function getAssetCategory(asset: AssetType): 'stableYields' | 'tokenizedStocks' | 'tokenizedGold' | null {
-  const mapping: Record<AssetType, 'stableYields' | 'tokenizedStocks' | 'tokenizedGold' | null> = {
+export function getAssetCategory(asset: AssetType): PortfolioCategory | null {
+  const mapping: Record<AssetType, PortfolioCategory | null> = {
     USDC: null, // USDC is deposit currency, not held long-term
+    USDT: null,
+    USDE: 'defiYield',
+    PYUSD: null,
     USDM: 'stableYields',
-    BCSPX: 'tokenizedStocks',
     PAXG: 'tokenizedGold',
+    XAUT: 'tokenizedGold', // Alternative gold token
+    WETH: 'bluechipCrypto',
+    WBTC: 'bluechipCrypto', // Alternative crypto
   };
 
   return mapping[asset];
+}
+
+/**
+ * Get all portfolio categories
+ */
+export function getAllCategories(): PortfolioCategory[] {
+  return ['stableYields', 'tokenizedGold', 'defiYield', 'bluechipCrypto'];
 }
 
 /**

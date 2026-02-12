@@ -110,8 +110,8 @@ class SwapController extends Controller {
    * Get swap pricing preview without executing
    *
    * Query params:
-    * - fromAsset: asset symbol (e.g., USDC, USDM, BCSPX, TSLAon)
-    * - toAsset: asset symbol (e.g., USDC, USDM, BCSPX, TSLAon)
+     * - fromAsset: asset symbol (e.g., USDC, USDM, IVVON, TSLAon)
+     * - toAsset: asset symbol (e.g., USDC, USDM, IVVON, TSLAon)
    * - amount: number (in token units, not wei)
    */
   public static async getSwapQuote(req: Request, res: Response) {
@@ -279,8 +279,8 @@ class SwapController extends Controller {
    * Execute user-initiated swap
    *
    * Body:
-    * - fromAsset: asset symbol (e.g., USDC, USDM, BCSPX, TSLAon)
-    * - toAsset: asset symbol (e.g., USDC, USDM, BCSPX, TSLAon)
+     * - fromAsset: asset symbol (e.g., USDC, USDM, IVVON, TSLAon)
+     * - toAsset: asset symbol (e.g., USDC, USDM, IVVON, TSLAon)
    * - amount: number
    * - slippage?: number (optional, defaults to 1%)
    */

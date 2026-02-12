@@ -119,13 +119,17 @@ export type TokenSymbol = z.infer<typeof tokenSymbolSchema>;
  * Asset allocation schema
  */
 export const allocationSchema = z.object({
-  stableYields: percentageSchema,
-  tokenizedStocks: percentageSchema,
+  stableYields: percentageSchema.min(10, 'Minimum 10% stable yields required'),
   tokenizedGold: percentageSchema,
-  blueChipCrypto: percentageSchema.default(0),
+  defiYield: percentageSchema,
+  bluechipCrypto: percentageSchema,
 }).refine(
   (data) => {
-    const total = data.stableYields + data.tokenizedStocks + data.tokenizedGold + data.blueChipCrypto;
+    const total =
+      data.stableYields +
+      data.tokenizedGold +
+      data.defiYield +
+      data.bluechipCrypto;
     return Math.abs(total - 100) < 0.01; // Allow 0.01% rounding error
   },
   {

@@ -4,9 +4,15 @@ import { TransactionRepository } from '../../repositories/transaction.repo';
 import { PortfolioRepository } from '../../repositories/portfolio.repo';
 import { UserRepository } from '../../repositories/user.repo';
 import { WalletRepository } from '../../repositories/wallet.repo';
-import { createPublicClient, formatUnits, http, parseAbiItem } from 'viem';
-import { baseSepolia } from 'viem/chains';
+import { formatUnits, parseAbiItem } from 'viem';
 import { createLogger } from '../../utils/logger.util';
+import { ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE } from '../../configs/queue.config';
+import {
+  createChainClient,
+  getUsdcAddress,
+  getRequiredConfirmations,
+  getCurrentNetwork,
+} from '../../configs/chain.config';
 
 /**
  * Job data structure for onchain deposit confirmation
@@ -16,17 +22,10 @@ export interface OnchainDepositConfirmationJobData {
   userId: string;
 }
 
-const BASE_RPC_URL = process.env.BASE_RPC_URL || '';
-const BASE_USDC_ADDRESS = process.env.BASE_USDC_ADDRESS || '';
-const DEPOSIT_CONFIRMATIONS_REQUIRED = Number(
-  process.env.DEPOSIT_CONFIRMATIONS_REQUIRED || 2
-);
-
-// Viem public client for blockchain queries
-const baseClient = createPublicClient({
-  chain: baseSepolia,
-  transport: http(BASE_RPC_URL),
-});
+// Use chain config for network-aware settings
+const baseClient = createChainClient();
+const BASE_USDC_ADDRESS = getUsdcAddress();
+const DEPOSIT_CONFIRMATIONS_REQUIRED = getRequiredConfirmations();
 
 // USDC Transfer event ABI
 const TRANSFER_EVENT = parseAbiItem(
@@ -70,6 +69,23 @@ export async function processOnchainDepositConfirmation(
   const userRepo = new UserRepository();
   const walletRepo = new WalletRepository();
 
+  const removeRepeatableJob = async (reason: string) => {
+    const repeatKey = job.opts.repeat?.key;
+    if (!repeatKey) return;
+
+    try {
+      await ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE.removeRepeatableByKey(repeatKey);
+      job.log(`Removed repeatable job (${reason})`);
+      logger.info('Repeatable job removed', { reason, repeatKey });
+    } catch (error) {
+      logger.warn('Failed to remove repeatable job', {
+        reason,
+        repeatKey,
+        error: (error as Error).message,
+      });
+    }
+  };
+
   try {
     // Step 1: Get deposit session
     logger.info('Fetching deposit session from database');
@@ -100,6 +116,7 @@ export async function processOnchainDepositConfirmation(
     if (session.status === 'CONFIRMED') {
       logger.info('Session already confirmed, skipping (idempotent)');
       job.log('Session already confirmed, skipping');
+      await removeRepeatableJob('already-confirmed');
       return;
     }
 
@@ -113,6 +130,7 @@ export async function processOnchainDepositConfirmation(
       });
       job.log('Session expired, marking as EXPIRED');
       await sessionRepo.updateStatus(session.id, 'EXPIRED');
+      await removeRepeatableJob('expired');
       return; // Don't retry - session is expired
     }
 
@@ -279,8 +297,9 @@ export async function processOnchainDepositConfirmation(
 
     const allocation = {
       stableYields: user.targetStableYieldsPercent || 80,
-      tokenizedStocks: user.targetTokenizedStocksPercent || 15,
+      defiYield: user.targetDefiYieldPercent || 0,
       tokenizedGold: user.targetTokenizedGoldPercent || 5,
+      bluechipCrypto: user.targetBluechipCryptoPercent || 15,
     };
 
     logger.info('User allocation retrieved', { allocation });
@@ -304,15 +323,10 @@ export async function processOnchainDepositConfirmation(
     logger.info('Transaction record created', { transactionId: transaction.id });
     job.log(`Created transaction record: ${transaction.id}`);
 
-    // Update portfolio
-    await logger.withTiming('Update portfolio values', async () => {
-      await portfolioRepo.updateValues(userId, {
-        stableYieldsValueUsd: matched.amount * ((allocation.stableYields || 0) / 100),
-        tokenizedStocksValueUsd:
-          matched.amount * ((allocation.tokenizedStocks || 0) / 100),
-        tokenizedGoldValueUsd:
-          matched.amount * ((allocation.tokenizedGold || 0) / 100),
-        kesUsdRate: 0,
+    // Treat deposit as cash until user confirms conversion
+    await logger.withTiming('Update wallet balance', async () => {
+      await walletRepo.incrementBalances(userId, {
+        usdcBalance: matched.amount,
       });
     });
 
@@ -320,23 +334,9 @@ export async function processOnchainDepositConfirmation(
       await portfolioRepo.recordDeposit(userId, matched.amount);
     }, { amountUsd: matched.amount });
 
-    await logger.withTiming('Calculate returns', async () => {
-      await portfolioRepo.calculateReturns(userId);
-    });
-
-    // Update wallet balances
-    await logger.withTiming('Update wallet balances', async () => {
-      await walletRepo.updateBalances(userId, {
-        stableYieldBalance: matched.amount * ((allocation.stableYields || 0) / 100),
-        tokenizedStocksBalance:
-          matched.amount * ((allocation.tokenizedStocks || 0) / 100),
-        tokenizedGoldBalance:
-          matched.amount * ((allocation.tokenizedGold || 0) / 100),
-      });
-    });
-
     // Mark session as confirmed
     await sessionRepo.updateStatus(session.id, 'CONFIRMED');
+    await removeRepeatableJob('confirmed');
 
     logger.info('Deposit confirmation complete', {
       amountUsd: matched.amount,

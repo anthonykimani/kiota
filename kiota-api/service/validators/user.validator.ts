@@ -16,9 +16,8 @@ export const createUserSchema = z.object({
   firstName: z.string().min(1, 'First name is required').max(50),
   lastName: z.string().min(1, 'Last name is required').max(50),
   targetStableYieldsPercent: z.number().min(0).max(100).default(80),
-  targetTokenizedStocksPercent: z.number().min(0).max(100).default(15),
   targetTokenizedGoldPercent: z.number().min(0).max(100).default(5),
-  targetBlueChipCryptoPercent: z.number().min(0).max(100).default(0),
+  targetBluechipCryptoPercent: z.number().min(0).max(100).default(15),
 }).refine(
   (data) => data.phoneNumber || data.email,
   {
@@ -28,9 +27,8 @@ export const createUserSchema = z.object({
   (data) => {
     const total =
       data.targetStableYieldsPercent +
-      data.targetTokenizedStocksPercent +
       data.targetTokenizedGoldPercent +
-      data.targetBlueChipCryptoPercent;
+      data.targetBluechipCryptoPercent;
     return Math.abs(total - 100) < 0.01;
   },
   {
@@ -48,17 +46,15 @@ export const updateUserSchema = z.object({
   firstName: z.string().min(1).max(50).optional(),
   lastName: z.string().min(1).max(50).optional(),
   targetStableYieldsPercent: z.number().min(0).max(100).optional(),
-  targetTokenizedStocksPercent: z.number().min(0).max(100).optional(),
   targetTokenizedGoldPercent: z.number().min(0).max(100).optional(),
-  targetBlueChipCryptoPercent: z.number().min(0).max(100).optional(),
+  targetBluechipCryptoPercent: z.number().min(0).max(100).optional(),
 }).refine(
   (data) => {
     // Only validate if all allocation fields are provided
     const allocationFields = [
       data.targetStableYieldsPercent,
-      data.targetTokenizedStocksPercent,
       data.targetTokenizedGoldPercent,
-      data.targetBlueChipCryptoPercent,
+      data.targetBluechipCryptoPercent,
     ];
 
     const allProvided = allocationFields.every((field) => field !== undefined);
@@ -104,9 +100,8 @@ export const userProfileSchema = z.object({
   lastName: z.string(),
   primaryAuthMethod: z.enum(['PHONE', 'EMAIL', 'GOOGLE', 'WALLET']),
   targetStableYieldsPercent: z.number(),
-  targetTokenizedStocksPercent: z.number(),
   targetTokenizedGoldPercent: z.number(),
-  targetBlueChipCryptoPercent: z.number(),
+  targetBluechipCryptoPercent: z.number(),
   firstDepositSubsidyUsed: z.boolean(),
   hasCompletedOnboarding: z.boolean(),
   hasCompletedQuiz: z.boolean(),

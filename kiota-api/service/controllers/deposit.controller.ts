@@ -5,24 +5,28 @@ import { UserRepository } from '../repositories/user.repo';
 import { MarketDataRepository } from '../repositories/market-data.repo';
 import { WalletRepository } from '../repositories/wallet.repo';
 import Controller from './controller';
-import { createPublicClient, formatUnits, http, parseAbi, parseAbiItem } from 'viem';
+import { formatUnits, parseAbi, parseAbiItem } from 'viem';
 import { AuthenticatedRequest } from '../interfaces/IAuth';
 
 import { DepositSessionRepository } from '../repositories/deposit-session.repo';
-import { baseSepolia } from 'viem/chains';
 import { DEPOSIT_COMPLETION_QUEUE, ONCHAIN_DEPOSIT_CONFIRMATION_QUEUE } from '../configs/queue.config';
 import { assetRegistry } from '../services/asset-registry.service';
 import { AssetSymbol } from '../enums/MarketData';
+import { 
+    createChainClient, 
+    getUsdcAddress, 
+    getRequiredConfirmations,
+    getCurrentNetwork,
+    logChainConfig 
+} from '../configs/chain.config';
 
-const BASE_RPC_URL = process.env.BASE_RPC_URL || '';
-const BASE_USDC_ADDRESS = process.env.BASE_USDC_ADDRESS || '';
-const DEPOSIT_CONFIRMATIONS_REQUIRED = Number(process.env.DEPOSIT_CONFIRMATIONS_REQUIRED || 2);
+// Log chain config on module load (helpful for debugging)
+logChainConfig();
 
-// Viem public client
-const baseClient = createPublicClient({
-    chain: baseSepolia,
-    transport: http(BASE_RPC_URL),
-});
+// Use chain config for network-aware client
+const baseClient = createChainClient();
+const BASE_USDC_ADDRESS = getUsdcAddress();
+const DEPOSIT_CONFIRMATIONS_REQUIRED = getRequiredConfirmations();
 
 // Viem ABI (minimal)
 const ERC20_ABI = parseAbi([
@@ -50,20 +54,17 @@ class DepositController extends Controller {
                 return res.send(super.response(super._401, null, ['Not authenticated']));
             }
 
-            const { expectedAmount, token, chain } = req.body || {};
-            const normalizedChain = (chain || 'base').toLowerCase();
+            const { expectedAmount, token } = req.body || {};
+            const currentNetwork = getCurrentNetwork();
             const normalizedToken = (token || 'USDC').toUpperCase();
 
-            if (normalizedChain !== 'base') {
-                return res.send(super.response(super._400, null, ['Only Base is supported in MVP']));
-            }
             if (normalizedToken !== 'USDC') {
                 return res.send(super.response(super._400, null, ['Only USDC is supported in MVP']));
             }
-            if (!BASE_RPC_URL || !BASE_USDC_ADDRESS) {
+            if (!BASE_USDC_ADDRESS) {
                 return res.send(
                     super.response(super._500, null, [
-                        'Missing BASE_RPC_URL or BASE_USDC_ADDRESS env vars'
+                        'Chain configuration error: USDC address not set'
                     ])
                 );
             }
@@ -105,7 +106,7 @@ class DepositController extends Controller {
             const session = await sessionRepo.create({
                 userId,
                 walletAddress: wallet.address,
-                chain: 'base',
+                chain: currentNetwork,
                 tokenSymbol: 'USDC',
                 tokenAddress: BASE_USDC_ADDRESS,
                 expectedAmount: expectedAmount ?? null,
@@ -146,7 +147,7 @@ class DepositController extends Controller {
                 super.response(super._201, {
                     depositSessionId: session.id,
                     depositAddress: wallet.address,
-                    chain: 'base',
+                    chain: currentNetwork,
                     token: { symbol: 'USDC', address: BASE_USDC_ADDRESS },
                     expiresAt
                 })
@@ -167,14 +168,6 @@ class DepositController extends Controller {
             if (!userId) {
                 return res.send(super.response(super._401, null, ['Not authenticated']));
             }
-            if (!BASE_RPC_URL || !BASE_USDC_ADDRESS) {
-                return res.send(
-                    super.response(super._500, null, [
-                        'Missing BASE_RPC_URL or BASE_USDC_ADDRESS env vars'
-                    ])
-                );
-            }
-
             const { depositSessionId } = req.body || {};
             if (!depositSessionId) {
                 return res.send(super.response(super._400, null, ['depositSessionId is required']));
@@ -313,8 +306,9 @@ class DepositController extends Controller {
 
             const allocation = {
                 stableYields: user.targetStableYieldsPercent || 80,
-                tokenizedStocks: user.targetTokenizedStocksPercent || 15,
-                tokenizedGold: user.targetTokenizedGoldPercent || 5
+                defiYield: user.targetDefiYieldPercent || 0,
+                tokenizedGold: user.targetTokenizedGoldPercent || 5,
+                bluechipCrypto: user.targetBluechipCryptoPercent || 15
             };
 
             // NOTE: Implement txRepo.createOnchainDeposit in your TransactionRepository.
@@ -330,24 +324,12 @@ class DepositController extends Controller {
                 allocation
             });
 
-            // For MVP, we treat USDC amount as USD value directly.
-            await portfolioRepo.updateValues(userId, {
-                stableYieldsValueUsd: matched.amount * ((allocation.stableYields || 0) / 100),
-                tokenizedStocksValueUsd: matched.amount * ((allocation.tokenizedStocks || 0) / 100),
-                tokenizedGoldValueUsd: matched.amount * ((allocation.tokenizedGold || 0) / 100),
-                kesUsdRate: 0
+            // Treat onchain deposit as cash until user confirms conversion.
+            await walletRepo.incrementBalances(userId, {
+                usdcBalance: matched.amount
             });
 
             await portfolioRepo.recordDeposit(userId, matched.amount);
-            await portfolioRepo.calculateReturns(userId);
-
-            // OPTIONAL: You can stop writing category balances into wallet table for MVP,
-            // but keeping it won't break anything if your UI expects it.
-            await walletRepo.updateBalances(userId, {
-                stableYieldBalance: matched.amount * ((allocation.stableYields || 0) / 100),
-                tokenizedStocksBalance: matched.amount * ((allocation.tokenizedStocks || 0) / 100),
-                tokenizedGoldBalance: matched.amount * ((allocation.tokenizedGold || 0) / 100)
-            } as any);
 
             await sessionRepo.updateStatus(session.id, 'CONFIRMED');
 
@@ -410,14 +392,16 @@ class DepositController extends Controller {
 
             const allocation = {
                 stableYields: user.targetStableYieldsPercent || 80,
-                tokenizedStocks: user.targetTokenizedStocksPercent || 15,
+                defiYield: user.targetDefiYieldPercent || 0,
                 tokenizedGold: user.targetTokenizedGoldPercent || 5,
+                bluechipCrypto: user.targetBluechipCryptoPercent || 15,
             };
 
             const classKeys = [
                 { key: 'stable_yields', weight: allocation.stableYields, defaultReturn: 0.05 },
-                { key: 'tokenized_stocks', weight: allocation.tokenizedStocks, defaultReturn: 0.1 },
+                { key: 'defi_yield', weight: allocation.defiYield, defaultReturn: 0.06 },
                 { key: 'tokenized_gold', weight: allocation.tokenizedGold, defaultReturn: 0.04 },
+                { key: 'bluechip_crypto', weight: allocation.bluechipCrypto, defaultReturn: 0.15 },
             ] as const;
 
             const assets = [] as Array<{
@@ -435,7 +419,7 @@ class DepositController extends Controller {
                 const primaryAsset = await assetRegistry.getPrimaryAssetByClassKey(assetClass.key);
                 if (!primaryAsset) continue;
 
-                const marketData = await marketDataRepo.getAssetData(primaryAsset.symbol as AssetSymbol);
+                const marketData = await marketDataRepo.getAssetData(primaryAsset.symbol);
                 const apy = marketData?.currentApy != null
                     ? Number(marketData.currentApy) / 100
                     : assetClass.defaultReturn;
@@ -557,8 +541,9 @@ class DepositController extends Controller {
             let allocation;
             if (customAllocation) {
                 const total = customAllocation.stableYields +
-                    customAllocation.tokenizedStocks +
-                    customAllocation.tokenizedGold;
+                    customAllocation.defiYield +
+                    customAllocation.tokenizedGold +
+                    customAllocation.bluechipCrypto;
 
                 if (Math.abs(total - 100) > 0.01) {
                     return res.send(
@@ -572,14 +557,16 @@ class DepositController extends Controller {
 
                 allocation = {
                     stableYields: customAllocation.stableYields,
-                    tokenizedStocks: customAllocation.tokenizedStocks,
-                    tokenizedGold: customAllocation.tokenizedGold
+                    defiYield: customAllocation.defiYield,
+                    tokenizedGold: customAllocation.tokenizedGold,
+                    bluechipCrypto: customAllocation.bluechipCrypto
                 };
             } else {
                 allocation = {
                     stableYields: user.targetStableYieldsPercent || 80,
-                    tokenizedStocks: user.targetTokenizedStocksPercent || 15,
-                    tokenizedGold: user.targetTokenizedGoldPercent || 5
+                    defiYield: user.targetDefiYieldPercent || 0,
+                    tokenizedGold: user.targetTokenizedGoldPercent || 5,
+                    bluechipCrypto: user.targetBluechipCryptoPercent || 15
                 };
             }
 
@@ -605,7 +592,8 @@ class DepositController extends Controller {
             });
 
             const stableAsset = await assetRegistry.getPrimaryAssetByClassKey('stable_yields');
-            const stocksAsset = await assetRegistry.getPrimaryAssetByClassKey('tokenized_stocks');
+            const defiYieldAsset = await assetRegistry.getPrimaryAssetByClassKey('defi_yield');
+            const cryptoAsset = await assetRegistry.getPrimaryAssetByClassKey('bluechip_crypto');
             const goldAsset = await assetRegistry.getPrimaryAssetByClassKey('tokenized_gold');
 
             const assetBreakdown = {
@@ -614,11 +602,15 @@ class DepositController extends Controller {
                     amountUsd: effectiveAmountUsd * ((allocation.stableYields || 0) / 100),
                     percentage: allocation.stableYields || 0
                 },
-                tokenizedStocks: {
-                    asset: stocksAsset?.symbol || null,
-                    amountUsd: effectiveAmountUsd * ((allocation.tokenizedStocks || 0) / 100),
-                    percentage: allocation.tokenizedStocks || 0,
-                    requiresTier2: true
+                defiYield: {
+                    asset: defiYieldAsset?.symbol || null,
+                    amountUsd: effectiveAmountUsd * ((allocation.defiYield || 0) / 100),
+                    percentage: allocation.defiYield || 0
+                },
+                bluechipCrypto: {
+                    asset: cryptoAsset?.symbol || null,
+                    amountUsd: effectiveAmountUsd * ((allocation.bluechipCrypto || 0) / 100),
+                    percentage: allocation.bluechipCrypto || 0
                 },
                 tokenizedGold: {
                     asset: goldAsset?.symbol || null,
@@ -863,8 +855,9 @@ class DepositController extends Controller {
             // Update portfolio
             await portfolioRepo.updateValues(transaction.userId, {
                 stableYieldsValueUsd: amountUsd * ((allocation?.stableYields || 0) / 100),
-                tokenizedStocksValueUsd: amountUsd * ((allocation?.tokenizedStocks || 0) / 100),
+                defiYieldValueUsd: amountUsd * ((allocation?.defiYield || 0) / 100),
                 tokenizedGoldValueUsd: amountUsd * ((allocation?.tokenizedGold || 0) / 100),
+                bluechipCryptoValueUsd: amountUsd * ((allocation?.bluechipCrypto || 0) / 100),
                 kesUsdRate: transaction.exchangeRate
             });
 
@@ -877,8 +870,9 @@ class DepositController extends Controller {
             // Update wallet balances
             await walletRepo.updateBalances(transaction.userId, {
                 stableYieldBalance: amountUsd * ((allocation?.stableYields || 0) / 100),
-                tokenizedStocksBalance: amountUsd * ((allocation?.tokenizedStocks || 0) / 100),
-                tokenizedGoldBalance: amountUsd * ((allocation?.tokenizedGold || 0) / 100)
+                defiYieldBalance: amountUsd * ((allocation?.defiYield || 0) / 100),
+                tokenizedGoldBalance: amountUsd * ((allocation?.tokenizedGold || 0) / 100),
+                bluechipCryptoBalance: amountUsd * ((allocation?.bluechipCrypto || 0) / 100)
             });
 
             // Mark first deposit subsidy as used
@@ -972,32 +966,84 @@ class DepositController extends Controller {
             }
 
             // Calculate swap amounts based on deposited USDC amount
-            const depositedAmount = session.matchedAmount || session.expectedAmount || 0;
+            const sessionAmount = session.matchedAmount || session.expectedAmount || 0;
+
+            if (sessionAmount <= 0) {
+                return res.send(
+                    super.response(super._400, null, ['Invalid deposit amount'])
+                );
+            }
+
+            // Validate against on-chain USDC balance to prevent over-spending
+            const { WalletRepository } = await import('../repositories/wallet.repo');
+            const walletRepo = new WalletRepository();
+            const wallet = await walletRepo.getByUserId(userId);
+
+            if (!wallet) {
+                return res.send(super.response(super._404, null, ['Wallet not found']));
+            }
+
+            let onchainUsdcBalance: number;
+            try {
+                const usdcRaw = await baseClient.readContract({
+                    address: BASE_USDC_ADDRESS as `0x${string}`,
+                    abi: parseAbi(['function balanceOf(address) view returns (uint256)']),
+                    functionName: 'balanceOf',
+                    args: [wallet.address as `0x${string}`],
+                });
+                onchainUsdcBalance = Number(formatUnits(usdcRaw as bigint, 6));
+            } catch (err) {
+                console.warn('[convertDeposit] Failed to read on-chain USDC balance, falling back to session amount:', err);
+                onchainUsdcBalance = sessionAmount;
+            }
+
+            // Use the lesser of session amount and on-chain balance
+            const depositedAmount = Math.min(sessionAmount, onchainUsdcBalance);
+            console.log(`[convertDeposit] Session amount: ${sessionAmount}, On-chain USDC: ${onchainUsdcBalance}, Using: ${depositedAmount}`);
 
             if (depositedAmount <= 0) {
                 return res.send(
-                    super.response(super._400, null, ['Invalid deposit amount'])
+                    super.response(super._400, null, [
+                        `No USDC available on-chain. On-chain balance: ${onchainUsdcBalance} USDC`
+                    ])
                 );
             }
 
             // Calculate allocation amounts
             const stableYieldsAmount =
                 (depositedAmount * (user.targetStableYieldsPercent || 80)) / 100;
-            const tokenizedStocksAmount =
-                (depositedAmount * (user.targetTokenizedStocksPercent || 15)) / 100;
+            const defiYieldAmount =
+                (depositedAmount * (user.targetDefiYieldPercent || 0)) / 100;
             const tokenizedGoldAmount =
                 (depositedAmount * (user.targetTokenizedGoldPercent || 5)) / 100;
+            const bluechipCryptoAmount =
+                (depositedAmount * (user.targetBluechipCryptoPercent || 15)) / 100;
 
             // Create conversion group ID (links all swaps in same conversion)
             const conversionGroupId = uuidv4();
 
             const stableAsset = await assetRegistry.getPrimaryAssetByClassKey('stable_yields');
-            const stocksAsset = await assetRegistry.getPrimaryAssetByClassKey('tokenized_stocks');
+            const defiYieldAsset = await assetRegistry.getPrimaryAssetByClassKey('defi_yield');
+            const cryptoAsset = await assetRegistry.getPrimaryAssetByClassKey('bluechip_crypto');
             const goldAsset = await assetRegistry.getPrimaryAssetByClassKey('tokenized_gold');
 
-            if (!stableAsset || !stocksAsset || !goldAsset) {
+            if (!stableAsset || !defiYieldAsset || !cryptoAsset || !goldAsset) {
                 return res.send(
                     super.response(super._500, null, ['Missing primary assets for one or more classes'])
+                );
+            }
+
+            const network = getCurrentNetwork();
+            try {
+                await assetRegistry.resolveAssetAddress(stableAsset, network);
+                await assetRegistry.resolveAssetAddress(defiYieldAsset, network);
+                await assetRegistry.resolveAssetAddress(cryptoAsset, network);
+                await assetRegistry.resolveAssetAddress(goldAsset, network);
+            } catch (error) {
+                return res.send(
+                    super.response(super._400, null, [
+                        (error as Error).message || 'Asset not available on current network'
+                    ])
                 );
             }
 
@@ -1006,7 +1052,7 @@ class DepositController extends Controller {
             const createdSwaps = [];
 
             // Swap USDC → primary Stable Yields asset
-            if (stableYieldsAmount >= 1) {
+            if (stableYieldsAmount > 0) {
                 const estimatedToAmount = stableYieldsAmount * 0.998; // Assume 0.2% slippage
 
                 const transaction = await swapRepo.createSwap({
@@ -1049,15 +1095,15 @@ class DepositController extends Controller {
                 });
             }
 
-            // Swap USDC → primary Tokenized Stocks asset
-            if (tokenizedStocksAmount >= 1) {
-                const estimatedToAmount = tokenizedStocksAmount * 0.998;
+            // Swap USDC → primary DeFi Yield asset
+            if (defiYieldAmount > 0) {
+                const estimatedToAmount = defiYieldAmount * 0.998;
 
                 const transaction = await swapRepo.createSwap({
                     userId,
                     fromAsset: 'USDC',
-                    toAsset: stocksAsset.symbol,
-                    fromAmount: tokenizedStocksAmount,
+                    toAsset: defiYieldAsset.symbol,
+                    fromAmount: defiYieldAmount,
                     estimatedToAmount,
                     slippage: 1.0,
                     metadata: {
@@ -1073,8 +1119,8 @@ class DepositController extends Controller {
                         transactionId: transaction.id,
                         userId,
                         fromAsset: 'USDC',
-                        toAsset: stocksAsset.symbol,
-                        amount: tokenizedStocksAmount,
+                        toAsset: defiYieldAsset.symbol,
+                        amount: defiYieldAmount,
                         slippage: 1.0,
                     },
                     {
@@ -1088,13 +1134,57 @@ class DepositController extends Controller {
 
                 createdSwaps.push({
                     transactionId: transaction.id,
-                    toAsset: stocksAsset.symbol,
-                    amount: tokenizedStocksAmount,
+                    toAsset: defiYieldAsset.symbol,
+                    amount: defiYieldAmount,
+                });
+            }
+
+            // Swap USDC → primary Blue Chip Crypto asset
+            if (bluechipCryptoAmount > 0) {
+                const estimatedToAmount = bluechipCryptoAmount * 0.998;
+
+                const transaction = await swapRepo.createSwap({
+                    userId,
+                    fromAsset: 'USDC',
+                    toAsset: cryptoAsset.symbol,
+                    fromAmount: bluechipCryptoAmount,
+                    estimatedToAmount,
+                    slippage: 1.0,
+                    metadata: {
+                        conversionGroupId,
+                        depositSessionId,
+                        initiatedVia: 'deposit-conversion',
+                    },
+                    type: 'swap' as any,
+                });
+
+                await SWAP_EXECUTION_QUEUE.add(
+                    {
+                        transactionId: transaction.id,
+                        userId,
+                        fromAsset: 'USDC',
+                        toAsset: cryptoAsset.symbol,
+                        amount: bluechipCryptoAmount,
+                        slippage: 1.0,
+                    },
+                    {
+                        attempts: 3,
+                        backoff: { type: 'exponential', delay: 2000 },
+                        jobId: `swap-execute-${transaction.id}`,
+                        removeOnComplete: true,
+                        removeOnFail: false,
+                    }
+                );
+
+                createdSwaps.push({
+                    transactionId: transaction.id,
+                    toAsset: cryptoAsset.symbol,
+                    amount: bluechipCryptoAmount,
                 });
             }
 
             // Swap USDC → primary Tokenized Gold asset
-            if (tokenizedGoldAmount >= 1) {
+            if (tokenizedGoldAmount > 0) {
                 const estimatedToAmount = tokenizedGoldAmount * 0.998;
 
                 const transaction = await swapRepo.createSwap({
@@ -1148,9 +1238,279 @@ class DepositController extends Controller {
                 estimatedCompletionTime: '5-10 minutes',
                 allocation: {
                     stableYields: user.targetStableYieldsPercent || 80,
-                    tokenizedStocks: user.targetTokenizedStocksPercent || 15,
+                    defiYield: user.targetDefiYieldPercent || 0,
                     tokenizedGold: user.targetTokenizedGoldPercent || 5,
+                    bluechipCrypto: user.targetBluechipCryptoPercent || 15,
                 },
+            };
+
+            return res.send(super.response(super._201, conversionData));
+        } catch (error) {
+            return res.send(super.response(super._500, null, super.ex(error)));
+        }
+    }
+
+    /**
+     * Convert wallet USDC balance to user's target allocation
+     * Body:
+     * - amountUsd?: number (optional, defaults to full wallet balance)
+     */
+    public static async convertWalletBalance(req: Request, res: Response) {
+        try {
+            const userId = (req as AuthenticatedRequest).userId;
+            if (!userId) {
+                return res.send(super.response(super._401, null, ['Not authenticated']));
+            }
+
+            const { amountUsd } = req.body || {};
+
+            const { UserRepository } = await import('../repositories/user.repo');
+            const { WalletRepository } = await import('../repositories/wallet.repo');
+            const { SwapRepository } = await import('../repositories/swap.repo');
+            const { SWAP_EXECUTION_QUEUE } = await import('../configs/queue.config');
+            const { v4: uuidv4 } = await import('uuid');
+
+            const userRepo = new UserRepository();
+            const walletRepo = new WalletRepository();
+
+            const user = await userRepo.getById(userId);
+            const wallet = await walletRepo.getByUserId(userId);
+
+            if (!user || !wallet) {
+                return res.send(super.response(super._404, null, ['User or wallet not found']));
+            }
+
+            // Read on-chain USDC balance for accuracy
+            let onchainUsdcBalance: number;
+            try {
+                const usdcRaw = await baseClient.readContract({
+                    address: BASE_USDC_ADDRESS as `0x${string}`,
+                    abi: parseAbi(['function balanceOf(address) view returns (uint256)']),
+                    functionName: 'balanceOf',
+                    args: [wallet.address as `0x${string}`],
+                });
+                onchainUsdcBalance = Number(formatUnits(usdcRaw as bigint, 6));
+            } catch (err) {
+                console.warn('[convertWalletBalance] Failed to read on-chain USDC, using DB balance:', err);
+                onchainUsdcBalance = Number(wallet.usdcBalance || 0);
+            }
+
+            const availableBalance = onchainUsdcBalance;
+            const convertAmount = amountUsd != null ? Math.min(Number(amountUsd), availableBalance) : availableBalance;
+            console.log(`[convertWalletBalance] On-chain USDC: ${onchainUsdcBalance}, DB balance: ${wallet.usdcBalance}, Converting: ${convertAmount}`);
+
+            if (!convertAmount || convertAmount <= 0) {
+                return res.send(super.response(super._400, null, [
+                    `No USDC balance available to convert. On-chain: ${onchainUsdcBalance} USDC`
+                ]));
+            }
+
+            if (convertAmount > availableBalance) {
+                return res.send(super.response(super._400, null, [
+                    `Amount ${convertAmount} exceeds on-chain USDC balance of ${availableBalance}`
+                ]));
+            }
+
+            const allocation = {
+                stableYields: user.targetStableYieldsPercent || 80,
+                defiYield: user.targetDefiYieldPercent || 0,
+                tokenizedGold: user.targetTokenizedGoldPercent || 5,
+                bluechipCrypto: user.targetBluechipCryptoPercent || 15,
+            };
+
+            const stableYieldsAmount = (convertAmount * allocation.stableYields) / 100;
+            const defiYieldAmount = (convertAmount * allocation.defiYield) / 100;
+            const tokenizedGoldAmount = (convertAmount * allocation.tokenizedGold) / 100;
+            const bluechipCryptoAmount = (convertAmount * allocation.bluechipCrypto) / 100;
+
+            const conversionGroupId = uuidv4();
+
+            const stableAsset = await assetRegistry.getPrimaryAssetByClassKey('stable_yields');
+            const defiYieldAsset = await assetRegistry.getPrimaryAssetByClassKey('defi_yield');
+            const cryptoAsset = await assetRegistry.getPrimaryAssetByClassKey('bluechip_crypto');
+            const goldAsset = await assetRegistry.getPrimaryAssetByClassKey('tokenized_gold');
+
+            if (!stableAsset || !defiYieldAsset || !cryptoAsset || !goldAsset) {
+                return res.send(
+                    super.response(super._500, null, ['Missing primary assets for one or more classes'])
+                );
+            }
+
+            const swapRepo = new SwapRepository();
+            const createdSwaps = [];
+
+            if (stableYieldsAmount > 0) {
+                const estimatedToAmount = stableYieldsAmount * 0.998;
+                const transaction = await swapRepo.createSwap({
+                    userId,
+                    fromAsset: 'USDC',
+                    toAsset: stableAsset.symbol,
+                    fromAmount: stableYieldsAmount,
+                    estimatedToAmount,
+                    slippage: 1.0,
+                    metadata: {
+                        conversionGroupId,
+                        initiatedVia: 'wallet-conversion',
+                    },
+                    type: 'swap' as any,
+                });
+
+                await SWAP_EXECUTION_QUEUE.add(
+                    {
+                        transactionId: transaction.id,
+                        userId,
+                        fromAsset: 'USDC',
+                        toAsset: stableAsset.symbol,
+                        amount: stableYieldsAmount,
+                        slippage: 1.0,
+                    },
+                    {
+                        attempts: 3,
+                        backoff: { type: 'exponential', delay: 2000 },
+                        jobId: `swap-execute-${transaction.id}`,
+                        removeOnComplete: true,
+                        removeOnFail: false,
+                    }
+                );
+
+                createdSwaps.push({
+                    transactionId: transaction.id,
+                    toAsset: stableAsset.symbol,
+                    amount: stableYieldsAmount,
+                });
+            }
+
+            if (defiYieldAmount > 0) {
+                const estimatedToAmount = defiYieldAmount * 0.998;
+                const transaction = await swapRepo.createSwap({
+                    userId,
+                    fromAsset: 'USDC',
+                    toAsset: defiYieldAsset.symbol,
+                    fromAmount: defiYieldAmount,
+                    estimatedToAmount,
+                    slippage: 1.0,
+                    metadata: {
+                        conversionGroupId,
+                        initiatedVia: 'wallet-conversion',
+                    },
+                    type: 'swap' as any,
+                });
+
+                await SWAP_EXECUTION_QUEUE.add(
+                    {
+                        transactionId: transaction.id,
+                        userId,
+                        fromAsset: 'USDC',
+                        toAsset: defiYieldAsset.symbol,
+                        amount: defiYieldAmount,
+                        slippage: 1.0,
+                    },
+                    {
+                        attempts: 3,
+                        backoff: { type: 'exponential', delay: 2000 },
+                        jobId: `swap-execute-${transaction.id}`,
+                        removeOnComplete: true,
+                        removeOnFail: false,
+                    }
+                );
+
+                createdSwaps.push({
+                    transactionId: transaction.id,
+                    toAsset: defiYieldAsset.symbol,
+                    amount: defiYieldAmount,
+                });
+            }
+
+            if (bluechipCryptoAmount > 0) {
+                const estimatedToAmount = bluechipCryptoAmount * 0.998;
+                const transaction = await swapRepo.createSwap({
+                    userId,
+                    fromAsset: 'USDC',
+                    toAsset: cryptoAsset.symbol,
+                    fromAmount: bluechipCryptoAmount,
+                    estimatedToAmount,
+                    slippage: 1.0,
+                    metadata: {
+                        conversionGroupId,
+                        initiatedVia: 'wallet-conversion',
+                    },
+                    type: 'swap' as any,
+                });
+
+                await SWAP_EXECUTION_QUEUE.add(
+                    {
+                        transactionId: transaction.id,
+                        userId,
+                        fromAsset: 'USDC',
+                        toAsset: cryptoAsset.symbol,
+                        amount: bluechipCryptoAmount,
+                        slippage: 1.0,
+                    },
+                    {
+                        attempts: 3,
+                        backoff: { type: 'exponential', delay: 2000 },
+                        jobId: `swap-execute-${transaction.id}`,
+                        removeOnComplete: true,
+                        removeOnFail: false,
+                    }
+                );
+
+                createdSwaps.push({
+                    transactionId: transaction.id,
+                    toAsset: cryptoAsset.symbol,
+                    amount: bluechipCryptoAmount,
+                });
+            }
+
+            if (tokenizedGoldAmount > 0) {
+                const estimatedToAmount = tokenizedGoldAmount * 0.998;
+                const transaction = await swapRepo.createSwap({
+                    userId,
+                    fromAsset: 'USDC',
+                    toAsset: goldAsset.symbol,
+                    fromAmount: tokenizedGoldAmount,
+                    estimatedToAmount,
+                    slippage: 1.0,
+                    metadata: {
+                        conversionGroupId,
+                        initiatedVia: 'wallet-conversion',
+                    },
+                    type: 'swap' as any,
+                });
+
+                await SWAP_EXECUTION_QUEUE.add(
+                    {
+                        transactionId: transaction.id,
+                        userId,
+                        fromAsset: 'USDC',
+                        toAsset: goldAsset.symbol,
+                        amount: tokenizedGoldAmount,
+                        slippage: 1.0,
+                    },
+                    {
+                        attempts: 3,
+                        backoff: { type: 'exponential', delay: 2000 },
+                        jobId: `swap-execute-${transaction.id}`,
+                        removeOnComplete: true,
+                        removeOnFail: false,
+                    }
+                );
+
+                createdSwaps.push({
+                    transactionId: transaction.id,
+                    toAsset: goldAsset.symbol,
+                    amount: tokenizedGoldAmount,
+                });
+            }
+
+            const conversionData = {
+                conversionGroupId,
+                convertedAmount: convertAmount,
+                status: 'pending',
+                swaps: createdSwaps,
+                swapCount: createdSwaps.length,
+                estimatedCompletionTime: '5-10 minutes',
+                allocation,
             };
 
             return res.send(super.response(super._201, conversionData));

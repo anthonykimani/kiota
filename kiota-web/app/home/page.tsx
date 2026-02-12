@@ -9,26 +9,27 @@ import { PortfolioOverview } from '@/components/custom/portfolio-overview'
 import { MarketPerformance } from '@/components/custom/market-performance'
 import { CryptoTradingBot, EyeClosed, HedgeFund } from '@/lib/svg'
 import { 
-    marketPerformanceAssets,
     formatCurrency,
-    formatChange,
     type UserPortfolio,
-    type AssetClassData
+    type AssetClassData,
+    assetIcons
 } from '@/lib/helpers'
 import { UsdcSvg, TslaSvg } from '@/lib/svg'
 import Image from 'next/image'
 import React, { useMemo } from 'react'
 import { useDashboard } from '@/hooks/use-dashboard'
+import { usePortfolio } from '@/hooks/use-portfolio'
 import { useAuth } from '@/context/auth-context'
 
 const HomePage = () => {
     const router = useRouter()
     const { isAuthenticated, isLoading: authLoading, user } = useAuth()
     const { data: dashboard, isLoading: dashboardLoading, error } = useDashboard()
+    const { data: portfolioDetail } = usePortfolio('1M') // Get 1 month history for chart
 
     // Transform API dashboard data to UserPortfolio format
     const portfolio: UserPortfolio | null = useMemo(() => {
-        if (!dashboard?.portfolio || dashboard.portfolio.totalValueUsd <= 0) {
+        if (!dashboard?.portfolio || !dashboard.onchain?.hasHoldings) {
             return null
         }
 
@@ -64,8 +65,46 @@ const HomePage = () => {
         }
     }, [dashboard])
 
+    const investedValue = dashboard?.onchain?.hasHoldings
+        ? Number(dashboard?.onchain?.totalValueUsd || 0)
+        : 0
+    const walletBalance = Number(dashboard?.wallet?.usdcBalance || 0)
+    const chainLabel = dashboard?.chain?.name || 'Wallet'
     const userHasAssets = portfolio !== null && portfolio.totalValue > 0
+    const hasInvestedAssets = dashboard?.onchain?.hasHoldings && investedValue > 0
     const isLoading = authLoading || dashboardLoading
+
+    // Transform portfolio history to chart data format
+    const chartData: ChartDataPoint[] = useMemo(() => {
+        if (!portfolioDetail?.history || portfolioDetail.history.length === 0) {
+            return []
+        }
+
+        const history = portfolioDetail.history
+        const totalPoints = history.length
+
+        return history.map((point, index) => {
+            const date = new Date(point.date)
+            let label: string
+
+            if (totalPoints <= 7) {
+                // Show "Jan 5" for weekly or less data
+                label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            } else {
+                // For daily data, show a label every 7th point (weekly)
+                if (index % 7 === 0 || index === totalPoints - 1) {
+                    label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                } else {
+                    label = ''
+                }
+            }
+
+            return {
+                date: label,
+                value: Number(point.value) || 0,
+            }
+        })
+    }, [portfolioDetail?.history])
 
     const handleSetupPortfolio = () => {
         router.push('/portfolio')
@@ -122,18 +161,15 @@ const HomePage = () => {
                     <p className="text-kiota-text-secondary">Hi, {displayName}!</p>
                 )}
 
-                {/* Header - Total Assets */}
+                {/* Header - Investment Balance */}
                 <div className='flex justify-between items-center'>
                     <div className="space-y-1">
-                        <p className="text-sm text-kiota-text-secondary">Your Total Asset</p>
+                        <p className="text-sm text-kiota-text-secondary">Investment Balance</p>
                         <h1 className="text-3xl font-semibold">
-                            {userHasAssets ? formatCurrency(portfolio!.totalValue) : '$0.00'}
+                            {formatCurrency(investedValue)}
                         </h1>
-                        <p className={`text-sm ${userHasAssets && portfolio!.totalChange >= 0 ? 'text-green-500' : 'text-kiota-text-secondary'}`}>
-                            {userHasAssets 
-                                ? formatChange(portfolio!.totalChange, portfolio!.totalChangePercent)
-                                : '0.00% $0.00'
-                            }
+                        <p className="text-sm text-kiota-text-secondary">
+                            {chainLabel} Wallet: {formatCurrency(walletBalance)}
                         </p>
                     </div>
                     <div>
@@ -142,16 +178,26 @@ const HomePage = () => {
                 </div>
 
                 {/* Chart */}
-                <ChartAreaLinear hasAssets={userHasAssets} />
+                <ChartAreaLinear data={chartData} hasAssets={chartData.length > 0} />
 
                 {/* Content based on whether user has assets */}
-                {userHasAssets ? (
+                {hasInvestedAssets ? (
                     <div className="flex flex-col gap-y-6">
                         {/* Portfolio Overview with Pie Chart and Asset Class Dropdowns */}
                         <PortfolioOverview portfolio={portfolio!} />
 
                         {/* Market Performance */}
-                        <MarketPerformance assets={marketPerformanceAssets} />
+                        <MarketPerformance
+                            assets={(dashboard?.marketPerformance || []).map((asset) => ({
+                                icon: assetIcons[asset.symbol] || UsdcSvg,
+                                ticker: asset.symbol,
+                                name: asset.name,
+                                symbol: asset.symbol,
+                                price: asset.price,
+                                change: asset.change,
+                                changePercent: asset.changePercent,
+                            }))}
+                        />
 
                         {/* Investment Goals */}
                         {dashboard?.goals && dashboard.goals.length > 0 ? (

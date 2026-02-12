@@ -63,6 +63,10 @@ class BalanceUpdaterService {
     const fromClassKey = await assetRegistry.getAssetClassKeyBySymbol(fromAsset);
     const toClassKey = await assetRegistry.getAssetClassKeyBySymbol(toAsset);
 
+    const isCashAsset = (symbol: string) => symbol.toUpperCase() === 'USDC';
+    const fromIsCash = isCashAsset(fromAsset);
+    const toIsCash = isCashAsset(toAsset);
+
     logger.info('Starting atomic balance update after swap', {
       userId,
       fromAsset,
@@ -92,8 +96,9 @@ class BalanceUpdaterService {
         portfolioTotal: portfolio.totalValueUsd,
         walletBalances: {
           stableYields: wallet.stableYieldBalance,
-          tokenizedStocks: wallet.tokenizedStocksBalance,
+          defiYield: wallet.defiYieldBalance,
           tokenizedGold: wallet.tokenizedGoldBalance,
+          bluechipCrypto: wallet.bluechipCryptoBalance,
         },
       });
 
@@ -102,7 +107,7 @@ class BalanceUpdaterService {
 
       // Decrement source asset
       const fromCategory = this.normalizeClassKey(fromClassKey);
-      if (fromCategory) {
+      if (fromCategory && !fromIsCash) {
         const fromField = this.getCategoryField(fromCategory);
         (portfolioUpdates as any)[fromField] = Number(portfolio[fromField]) - fromAmount;
         logger.debug(`Decrementing ${fromCategory}`, {
@@ -115,7 +120,7 @@ class BalanceUpdaterService {
 
       // Increment destination asset
       const toCategory = this.normalizeClassKey(toClassKey);
-      if (toCategory) {
+      if (toCategory && !toIsCash) {
         const toField = this.getCategoryField(toCategory);
         (portfolioUpdates as any)[toField] =
           ((portfolioUpdates as any)[toField] !== undefined
@@ -134,23 +139,28 @@ class BalanceUpdaterService {
         portfolioUpdates.stableYieldsValueUsd !== undefined
           ? portfolioUpdates.stableYieldsValueUsd
           : Number(portfolio.stableYieldsValueUsd);
-      const newStocks =
-        portfolioUpdates.tokenizedStocksValueUsd !== undefined
-          ? portfolioUpdates.tokenizedStocksValueUsd
-          : Number(portfolio.tokenizedStocksValueUsd);
+      const newDefiYield =
+        portfolioUpdates.defiYieldValueUsd !== undefined
+          ? portfolioUpdates.defiYieldValueUsd
+          : Number(portfolio.defiYieldValueUsd);
       const newGold =
         portfolioUpdates.tokenizedGoldValueUsd !== undefined
           ? portfolioUpdates.tokenizedGoldValueUsd
           : Number(portfolio.tokenizedGoldValueUsd);
+      const newCrypto =
+        portfolioUpdates.bluechipCryptoValueUsd !== undefined
+          ? portfolioUpdates.bluechipCryptoValueUsd
+          : Number(portfolio.bluechipCryptoValueUsd);
 
-      const newTotal = newStableYields + newStocks + newGold;
+      const newTotal = newStableYields + newDefiYield + newGold + newCrypto;
       portfolioUpdates.totalValueUsd = newTotal;
 
       // Calculate percentages
       if (newTotal > 0) {
         portfolioUpdates.stableYieldsPercent = (newStableYields / newTotal) * 100;
-        portfolioUpdates.tokenizedStocksPercent = (newStocks / newTotal) * 100;
+        portfolioUpdates.defiYieldPercent = (newDefiYield / newTotal) * 100;
         portfolioUpdates.tokenizedGoldPercent = (newGold / newTotal) * 100;
+        portfolioUpdates.bluechipCryptoPercent = (newCrypto / newTotal) * 100;
       }
 
       // Calculate returns (gains/losses)
@@ -168,8 +178,9 @@ class BalanceUpdaterService {
         newTotal,
         percentages: {
           stableYields: portfolioUpdates.stableYieldsPercent,
-          tokenizedStocks: portfolioUpdates.tokenizedStocksPercent,
+          defiYield: portfolioUpdates.defiYieldPercent,
           tokenizedGold: portfolioUpdates.tokenizedGoldPercent,
+          bluechipCrypto: portfolioUpdates.bluechipCryptoPercent,
         },
       });
 
@@ -180,18 +191,29 @@ class BalanceUpdaterService {
       const walletUpdates: Partial<Wallet> = {};
 
       // Decrement source balance
-      if (fromCategory) {
+      if (fromCategory && !fromIsCash) {
         const fromBalanceField = this.getBalanceField(fromCategory);
         (walletUpdates as any)[fromBalanceField] = Number(wallet[fromBalanceField]) - fromAmount;
       }
 
+      if (fromIsCash) {
+        (walletUpdates as any).usdcBalance = Number(wallet.usdcBalance) - fromAmount;
+      }
+
       // Increment destination balance
-      if (toCategory) {
+      if (toCategory && !toIsCash) {
         const toBalanceField = this.getBalanceField(toCategory);
         (walletUpdates as any)[toBalanceField] =
           ((walletUpdates as any)[toBalanceField] !== undefined
             ? Number((walletUpdates as any)[toBalanceField])
             : Number(wallet[toBalanceField])) + toAmount;
+      }
+
+      if (toIsCash) {
+        const base = (walletUpdates as any).usdcBalance !== undefined
+          ? Number((walletUpdates as any).usdcBalance)
+          : Number(wallet.usdcBalance);
+        (walletUpdates as any).usdcBalance = base + toAmount;
       }
 
       walletUpdates.balancesLastUpdated = new Date();
@@ -202,7 +224,7 @@ class BalanceUpdaterService {
       await walletRepo.update({ userId }, walletUpdates);
 
       if (portfolio) {
-        if (fromAsset) {
+        if (fromAsset && fromAsset.toUpperCase() !== 'USDC') {
           const existingFrom = await holdingRepo.findOne({
             where: { portfolioId: portfolio.id, assetSymbol: fromAsset },
           });
@@ -227,7 +249,7 @@ class BalanceUpdaterService {
           await holdingRepo.save(fromHolding);
         }
 
-        if (toAsset) {
+        if (toAsset && toAsset.toUpperCase() !== 'USDC') {
           const existingTo = await holdingRepo.findOne({
             where: { portfolioId: portfolio.id, assetSymbol: toAsset },
           });
@@ -268,8 +290,9 @@ class BalanceUpdaterService {
         portfolioTotal: newTotal,
         portfolioPercentages: {
           stableYields: portfolioUpdates.stableYieldsPercent?.toFixed(2),
-          tokenizedStocks: portfolioUpdates.tokenizedStocksPercent?.toFixed(2),
+          defiYield: portfolioUpdates.defiYieldPercent?.toFixed(2),
           tokenizedGold: portfolioUpdates.tokenizedGoldPercent?.toFixed(2),
+          bluechipCrypto: portfolioUpdates.bluechipCryptoPercent?.toFixed(2),
         },
       });
     });
@@ -312,14 +335,17 @@ class BalanceUpdaterService {
       // Accumulate all changes
       const portfolioChanges = {
         stableYields: 0,
-        tokenizedStocks: 0,
+        defiYield: 0,
         tokenizedGold: 0,
+        bluechipCrypto: 0,
       };
 
       const walletChanges = {
+        usdcBalance: 0,
         stableYieldBalance: 0,
-        tokenizedStocksBalance: 0,
+        defiYieldBalance: 0,
         tokenizedGoldBalance: 0,
+        bluechipCryptoBalance: 0,
       };
 
       // Process each swap
@@ -340,7 +366,10 @@ class BalanceUpdaterService {
         const fromCategory = this.normalizeClassKey(fromClassKey);
         const toCategory = this.normalizeClassKey(toClassKey);
 
-        if (fromCategory) {
+        // Handle USDC as source (cash being converted to portfolio assets)
+        if (fromAsset === 'USDC') {
+          walletChanges.usdcBalance -= fromAmount;
+        } else if (fromCategory) {
           portfolioChanges[fromCategory] -= fromAmount;
           walletChanges[this.getBalanceFieldSimple(fromCategory)] -= fromAmount;
         }
@@ -415,22 +444,25 @@ class BalanceUpdaterService {
 
       // Apply accumulated changes to portfolio
       const newStableYields = Number(portfolio.stableYieldsValueUsd) + portfolioChanges.stableYields;
-      const newStocks =
-        Number(portfolio.tokenizedStocksValueUsd) + portfolioChanges.tokenizedStocks;
+      const newDefiYield = Number(portfolio.defiYieldValueUsd) + portfolioChanges.defiYield;
       const newGold = Number(portfolio.tokenizedGoldValueUsd) + portfolioChanges.tokenizedGold;
-      const newTotal = newStableYields + newStocks + newGold;
+      const newCrypto =
+        Number(portfolio.bluechipCryptoValueUsd) + portfolioChanges.bluechipCrypto;
+      const newTotal = newStableYields + newDefiYield + newGold + newCrypto;
 
       const portfolioUpdates: Partial<Portfolio> = {
         stableYieldsValueUsd: newStableYields,
-        tokenizedStocksValueUsd: newStocks,
+        defiYieldValueUsd: newDefiYield,
         tokenizedGoldValueUsd: newGold,
+        bluechipCryptoValueUsd: newCrypto,
         totalValueUsd: newTotal,
       };
 
       if (newTotal > 0) {
         portfolioUpdates.stableYieldsPercent = (newStableYields / newTotal) * 100;
-        portfolioUpdates.tokenizedStocksPercent = (newStocks / newTotal) * 100;
+        portfolioUpdates.defiYieldPercent = (newDefiYield / newTotal) * 100;
         portfolioUpdates.tokenizedGoldPercent = (newGold / newTotal) * 100;
+        portfolioUpdates.bluechipCryptoPercent = (newCrypto / newTotal) * 100;
       }
 
       // Calculate returns
@@ -448,11 +480,13 @@ class BalanceUpdaterService {
 
       // Apply accumulated changes to wallet
       const walletUpdates: Partial<Wallet> = {
+        usdcBalance: Number(wallet.usdcBalance) + walletChanges.usdcBalance,
         stableYieldBalance: Number(wallet.stableYieldBalance) + walletChanges.stableYieldBalance,
-        tokenizedStocksBalance:
-          Number(wallet.tokenizedStocksBalance) + walletChanges.tokenizedStocksBalance,
+        defiYieldBalance: Number(wallet.defiYieldBalance) + walletChanges.defiYieldBalance,
         tokenizedGoldBalance:
           Number(wallet.tokenizedGoldBalance) + walletChanges.tokenizedGoldBalance,
+        bluechipCryptoBalance:
+          Number(wallet.bluechipCryptoBalance) + walletChanges.bluechipCryptoBalance,
         balancesLastUpdated: new Date(),
       };
 
@@ -463,8 +497,9 @@ class BalanceUpdaterService {
         portfolioTotal: newTotal,
         portfolioPercentages: {
           stableYields: portfolioUpdates.stableYieldsPercent?.toFixed(2),
-          tokenizedStocks: portfolioUpdates.tokenizedStocksPercent?.toFixed(2),
+          defiYield: portfolioUpdates.defiYieldPercent?.toFixed(2),
           tokenizedGold: portfolioUpdates.tokenizedGoldPercent?.toFixed(2),
+          bluechipCrypto: portfolioUpdates.bluechipCryptoPercent?.toFixed(2),
         },
       });
     });
@@ -476,12 +511,13 @@ class BalanceUpdaterService {
    * Get portfolio field name for asset category
    */
   private getCategoryField(
-    category: 'stableYields' | 'tokenizedStocks' | 'tokenizedGold'
+    category: 'stableYields' | 'defiYield' | 'tokenizedGold' | 'bluechipCrypto'
   ): keyof Portfolio {
     const mapping: Record<string, keyof Portfolio> = {
       stableYields: 'stableYieldsValueUsd',
-      tokenizedStocks: 'tokenizedStocksValueUsd',
+      defiYield: 'defiYieldValueUsd',
       tokenizedGold: 'tokenizedGoldValueUsd',
+      bluechipCrypto: 'bluechipCryptoValueUsd',
     };
     return mapping[category];
   }
@@ -490,12 +526,13 @@ class BalanceUpdaterService {
    * Get wallet balance field name for asset category
    */
   private getBalanceField(
-    category: 'stableYields' | 'tokenizedStocks' | 'tokenizedGold'
+    category: 'stableYields' | 'defiYield' | 'tokenizedGold' | 'bluechipCrypto'
   ): keyof Wallet {
     const mapping: Record<string, keyof Wallet> = {
       stableYields: 'stableYieldBalance',
-      tokenizedStocks: 'tokenizedStocksBalance',
+      defiYield: 'defiYieldBalance',
       tokenizedGold: 'tokenizedGoldBalance',
+      bluechipCrypto: 'bluechipCryptoBalance',
     };
     return mapping[category];
   }
@@ -504,30 +541,33 @@ class BalanceUpdaterService {
    * Get wallet balance field name (simple) for multi-swap accumulation
    */
   private getBalanceFieldSimple(
-    category: 'stableYields' | 'tokenizedStocks' | 'tokenizedGold'
-  ): 'stableYieldBalance' | 'tokenizedStocksBalance' | 'tokenizedGoldBalance' {
+    category: 'stableYields' | 'defiYield' | 'tokenizedGold' | 'bluechipCrypto'
+  ): 'stableYieldBalance' | 'defiYieldBalance' | 'tokenizedGoldBalance' | 'bluechipCryptoBalance' {
     const mapping = {
       stableYields: 'stableYieldBalance' as const,
-      tokenizedStocks: 'tokenizedStocksBalance' as const,
+      defiYield: 'defiYieldBalance' as const,
       tokenizedGold: 'tokenizedGoldBalance' as const,
+      bluechipCrypto: 'bluechipCryptoBalance' as const,
     };
     return mapping[category];
   }
 
   private normalizeClassKey(
     classKey: string | null
-  ): 'stableYields' | 'tokenizedStocks' | 'tokenizedGold' | null {
+  ): 'stableYields' | 'defiYield' | 'tokenizedGold' | 'bluechipCrypto' | null {
     if (!classKey) {
       return null;
     }
 
-    const mapping: Record<string, 'stableYields' | 'tokenizedStocks' | 'tokenizedGold'> = {
+    const mapping: Record<string, 'stableYields' | 'defiYield' | 'tokenizedGold' | 'bluechipCrypto'> = {
       stable_yields: 'stableYields',
-      tokenized_stocks: 'tokenizedStocks',
+      defi_yield: 'defiYield',
       tokenized_gold: 'tokenizedGold',
+      bluechip_crypto: 'bluechipCrypto',
       stableYields: 'stableYields',
-      tokenizedStocks: 'tokenizedStocks',
+      defiYield: 'defiYield',
       tokenizedGold: 'tokenizedGold',
+      bluechipCrypto: 'bluechipCrypto',
     };
 
     return mapping[classKey] ?? null;
